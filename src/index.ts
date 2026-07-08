@@ -28,7 +28,7 @@ _glean() {
     '-m[Summary mode]:mode:(concise detailed)'
     '--mode[Summary mode]:mode:(concise detailed)'
     '--provider[AI provider]:provider:(claude-cli agy)'
-    '--model[Model to use]:model:(haiku sonnet opus)'
+    '--model[Model to use]:model:(haiku sonnet opus flash pro)'
     '--single-file[Output to single combined file]'
     '--overview[Include book-level synthesis]'
     '--skip-existing[Skip if summaries exist]'
@@ -154,7 +154,7 @@ Options:
   --single-file                     Combine everything into one file
   --overview                        Add a book-level synthesis
   --skip-existing                   Skip already-summarized books
-  --model <haiku|sonnet|opus>       Model to use (default: haiku)
+  --model <haiku|sonnet|opus|flash|pro> Model to use (default: haiku)
   --provider <provider>             AI provider (default: claude-cli) (supports: claude-cli, agy)
   -h, --help                        Show this help
 

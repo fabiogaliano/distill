@@ -1,7 +1,7 @@
 # Default execution settings (can be overridden by CLI flags)
 defaults:
   mode: concise          # concise | detailed
-  model: haiku           # haiku | sonnet | opus
+  model: haiku           # claude: haiku | sonnet | opus, agy: flash | pro
   provider: claude-cli
   singleFile: true       # true = combined output, false = folder structure
   includeOverview: false # true = add book-level synthesis, false = chapters only
