@@ -10,7 +10,13 @@ export class AgyProvider implements SummaryProvider {
     prompt: string,
     options?: ProviderOptions
   ): Promise<string> {
-    const model = options?.model ?? getDefaultModel();
+    let model = options?.model ?? getDefaultModel();
+
+    if (model === 'flash') {
+      model = 'gemini-3.5-flash-medium';
+    } else if (model === 'pro') {
+      model = 'gemini-3.1-pro-low';
+    }
 
     const proc = Bun.spawn(
       ['agy', '-p', prompt, '--model', model],
