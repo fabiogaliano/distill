@@ -21,7 +21,7 @@ export interface Chapter {
 export type SummaryMode = 'concise' | 'detailed';
 
 // Provider types
-export type ProviderType = 'claude-cli' | 'anthropic-api' | 'openai';
+export type ProviderType = 'claude-cli' | 'anthropic-api' | 'openai' | 'agy';
 
 export interface ProviderOptions {
   model?: string;
