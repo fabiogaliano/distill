@@ -1,4 +1,4 @@
-# docs-summarizer
+# glean
 
 CLI tool to summarize documents and books with AI.
 
@@ -16,33 +16,32 @@ CLI tool to summarize documents and books with AI.
 ```bash
 git clone --recursive git@github.com:fabiogaliano/docs-summarizer.git
 cd docs-summarizer
-bun install
-bun run setup
+make install
 ```
 
 ## Usage
 
 ```bash
 # Summarize a single EPUB
-bun run src/index.ts ./book.epub
+glean ./book.epub
 
 # Summarize all EPUBs in a folder
-bun run src/index.ts ./books/
+glean ./books/
 
 # Interactive mode - select chapters manually
-bun run src/index.ts ./book.epub -i
+glean ./book.epub -i
 
 # Specify output directory
-bun run src/index.ts ./book.epub -o ./output/
+glean ./book.epub -o ./output/
 
 # Detailed mode with examples
-bun run src/index.ts ./book.epub -m detailed
+glean ./book.epub -m detailed
 
 # Use a different model
-bun run src/index.ts ./book.epub --model sonnet
+glean ./book.epub --model sonnet
 
 # Skip if already summarized
-bun run src/index.ts ./books/ --skip-existing
+glean ./books/ --skip-existing
 ```
 
 ## Options
@@ -112,6 +111,12 @@ Prefers starting from:
 - [Bun](https://bun.sh) runtime
 - [Rust](https://rustup.rs) toolchain (to build epub-chapter-splitter)
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) configured and available in PATH
+
+## Uninstall
+
+```bash
+make uninstall
+```
 
 ## Future
 

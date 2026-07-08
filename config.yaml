@@ -1,6 +1,6 @@
 # Default execution settings (can be overridden by CLI flags)
 defaults:
-  mode: detailed         # concise | detailed
+  mode: concise          # concise | detailed
   model: haiku           # haiku | sonnet | opus
   provider: claude-cli
   singleFile: true       # true = combined output, false = folder structure

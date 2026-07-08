@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { resolve, join, basename } from 'path';
 import { readdir, stat, rm, unlink } from 'fs/promises';
 import type { SummarizeOptions, SummaryMode, ProviderType, Chapter, ChapterInfo, AppConfig } from './types';
@@ -10,9 +11,48 @@ import { BookSummarizer } from './summarizer/book-summarizer';
 import { OutputWriter } from './output/writer';
 import { loadConfig, getConfig } from './config';
 
+// Output shell completion script
+function printCompletion(shell: string): void {
+  if (shell !== 'zsh') {
+    console.error(`Unsupported shell: ${shell}. Only 'zsh' is supported.`);
+    process.exit(1);
+  }
+
+  console.log(`#compdef glean
+
+_glean() {
+  local -a opts
+  opts=(
+    '-o[Output directory]:directory:_files -/'
+    '--output[Output directory]:directory:_files -/'
+    '-m[Summary mode]:mode:(concise detailed)'
+    '--mode[Summary mode]:mode:(concise detailed)'
+    '--provider[AI provider]:provider:(claude-cli)'
+    '--model[Model to use]:model:(haiku sonnet opus)'
+    '--single-file[Output to single combined file]'
+    '--overview[Include book-level synthesis]'
+    '--skip-existing[Skip if summaries exist]'
+    '-i[Interactive chapter selection]'
+    '--interactive[Interactive chapter selection]'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
+  _arguments -s $opts '*:epub file:_files -g "*.epub"'
+}
+
+compdef _glean glean`);
+}
+
 // Parse CLI arguments (config provides defaults)
 function parseArgs(config: AppConfig): SummarizeOptions | null {
   const args = Bun.argv.slice(2);
+
+  // Handle completion subcommand before anything else
+  if (args[0] === 'completion') {
+    printCompletion(args[1] || 'zsh');
+    process.exit(0);
+  }
 
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     printHelp();
@@ -101,30 +141,28 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
 
 function printHelp(): void {
   console.log(`
-docs-summarizer - Summarize documents and books using AI
+glean — AI-powered book summarizer
 
 Usage:
-  bun run src/index.ts <path>              Summarize epub file or folder
-  bun run src/index.ts summarize <path>    Same as above
+  glean <file.epub>                 Summarize a single book
+  glean <dir>                       Summarize all epubs in a directory
 
 Options:
-  -o, --output <dir>     Output directory (default: same as epub)
-  -m, --mode <mode>      Summary mode: concise or detailed
-  --provider <provider>  AI provider: claude-cli (default)
-  --model <model>        Model to use
-  --single-file          Output everything to a single combined file
-  --overview             Include book-level synthesis (off by default)
-  --skip-existing        Skip if summaries already exist
-  -i, --interactive      Interactively select chapters to summarize
-  -h, --help             Show this help
-
-Defaults are loaded from config.yaml
+  -m, --mode <concise|detailed>     Summary depth (default: concise)
+  -o, --output <dir>                Output directory (default: alongside epub)
+  -i, --interactive                 Pick chapters to include
+  --single-file                     Combine everything into one file
+  --overview                        Add a book-level synthesis
+  --skip-existing                   Skip already-summarized books
+  --model <haiku|sonnet|opus>       Model to use (default: haiku)
+  --provider <provider>             AI provider (default: claude-cli)
+  -h, --help                        Show this help
 
 Examples:
-  bun run src/index.ts ./book.epub
-  bun run src/index.ts ./books/ --mode detailed
-  bun run src/index.ts ./book.epub --single-file   # Single combined output
-  bun run src/index.ts ./book.epub -i              # Interactive chapter selection
+  glean book.epub
+  glean book.epub -m detailed --overview
+  glean ./library/ --skip-existing
+  glean book.epub -i --single-file
 `);
 }
 

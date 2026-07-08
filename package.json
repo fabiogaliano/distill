@@ -1,8 +1,11 @@
 {
-  "name": "docs-summarizer",
+  "name": "glean",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "glean": "./src/index.ts"
+  },
   "scripts": {
     "setup": "bun run scripts/setup.ts",
     "build": "bun build src/index.ts --outfile=dist/index.js --target=bun",

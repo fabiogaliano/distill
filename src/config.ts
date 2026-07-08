@@ -34,7 +34,7 @@ export const MIN_CONTENT_WORDS = 100;
 // Path to epub-chapter-splitter binary
 export const EPUB_SPLITTER_PATH = join(
   dirname(dirname(import.meta.dir)),
-  'epub-chapter-splitter/target/release/epub-splitter'
+  'epub-chapter-splitter/target/release/epub-chapter-splitter'
 );
 
 // Config singleton
