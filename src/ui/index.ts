@@ -28,6 +28,10 @@ class HeadlessUI implements UIProvider {
     if (!first) throw new Error('No choices provided');
     return first.value;
   }
+
+  async text(_message: string): Promise<string | undefined> {
+    return undefined;
+  }
 }
 
 /**

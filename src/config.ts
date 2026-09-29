@@ -31,11 +31,13 @@ export const INTRO_TERMS = [
 // Minimum word count to consider a chapter as content (not front matter)
 export const MIN_CONTENT_WORDS = 100;
 
+const REPO_ROOT = dirname(import.meta.dirname);
+
+// Paths in config.yaml (guides) are relative to the repo.
+export const repoPath = (path: string) => join(REPO_ROOT, path);
+
 // Path to epub-chapter-splitter binary
-export const EPUB_SPLITTER_PATH = join(
-  dirname(import.meta.dirname),
-  'epub-chapter-splitter/target/release/epub-chapter-splitter'
-);
+export const EPUB_SPLITTER_PATH = repoPath('epub-chapter-splitter/target/release/epub-chapter-splitter');
 
 // Config singleton
 let _config: AppConfig | null = null;
@@ -43,7 +45,7 @@ let _config: AppConfig | null = null;
 export async function loadConfig(): Promise<AppConfig> {
   if (_config) return _config;
 
-  const configPath = join(dirname(import.meta.dirname), 'config.yaml');
+  const configPath = repoPath('config.yaml');
   const content = await Bun.file(configPath).text();
   _config = parseYaml(content) as AppConfig;
   return _config;

@@ -36,4 +36,10 @@ export interface UIProvider {
    * @returns The selected value
    */
   selectOne<T>(message: string, choices: Choice<T>[]): Promise<T>;
+
+  /**
+   * Ask for a line of text
+   * @returns The text, or undefined if cancelled
+   */
+  text(message: string): Promise<string | undefined>;
 }

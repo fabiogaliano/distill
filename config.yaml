@@ -15,8 +15,27 @@ stages:
   synthesize: opus
   skill: opus
 
-# Parallel model calls per book; subscriptions rate-limit bursts
+# Parallel model calls per book (and eval runs per skill); subscriptions rate-limit bursts
 concurrency: 4
+
+skills:
+  # One SKILL.md per target, written with that model's prompting guide
+  targets:
+    claude:
+      reader: Claude Opus 5.5 and Fable 5.1 in Claude Code
+      guide: guides/claude-opus-5-5.md
+      install: ~/.claude/skills
+    gpt:
+      reader: GPT-6 Astra in the pi coding agent
+      guide: guides/gpt-6-astra.md
+      install: ~/.pi/agent/skills
+  # Gate: claude plugin eval, with-skill vs no-skill, on the recipe's cases
+  eval:
+    target: claude
+    runs: 3            # per case and arm; fewer makes the score noise
+    threshold: 0.8     # every case's with-skill score must reach this
+    attempts: 3        # eval → revise spec rounds before handing back to you
+    judge: sonnet      # a different model from the one under test
 
 prompts:
   # Model-picked with this prompt: evals/model-pick/ (keep them in sync when changing it)
@@ -68,3 +87,73 @@ prompts:
       - Only state what the notes support.
       - Don't walk through the chapters in order, and don't restate each chapter's summary.
       - Start directly with the argument: no title, no "This book…" or "In this book…" opener, no closing recap paragraph.
+
+  # Input: the library catalog (each synthesized book's overview and chapters),
+  # then any previous recipe with feedback on it
+  skill_plan: |
+      You are planning an agent skill built from books in a reading library. A skill is a SKILL.md file that Claude Code (and GPT in the pi agent) loads when a task matches its description, so the agent applies the books' ideas while doing real work. The skill's working name is "{{NAME}}". The library catalog follows these instructions: for each book, its slug, overview, and chapter list (index: title). If a previous recipe and feedback on it follow the catalog, revise that recipe to address the feedback.
+
+      Propose the recipe:
+      - description: what the agent reads when deciding whether to load the skill. Third person, under 600 characters: what the skill does, then "Use when…" with the concrete situations that should trigger it (kinds of task, what the user asks for). Specific enough that it doesn't fire on every loosely related request.
+      - focus: one paragraph on what the skill makes the agent do differently from a strong model without it, and what it leaves out.
+      - sources: the books (by slug) the skill draws on. Add "chapters" (a list of indices) only when a book is relevant in part; omit it to use the whole book.
+      - scope: "include" and "exclude", short lists of topics.
+      - evals: 5-7 test cases for an eval that runs each prompt with and without the skill. At least 4 where the skill should fire, covering at least two different kinds of request (for example: review this code, design this, decide between these options, explain why this is a problem), and 1-2 realistic near-misses where it should not fire. Each case:
+        - name: a kebab-case slug.
+        - fire: true or false.
+        - prompt: what a real user would type, with any code or context written out in full. It runs in an empty directory, so never refer to files or paths.
+        - expect: 2-4 statements a judge can check by reading only the final response. Make them concrete (e.g. "Identifies that both classes encode the file format, and names this information leakage"). For fire cases, test what the books add over a generic good answer, so that a strong model without the skill fails at least one. For no-fire cases, check that the response answers the actual request without steering it into the books' framework.
+
+      Only use books from the catalog. Respond with a JSON object only:
+      {"description": "…", "focus": "…", "sources": [{"book": "…", "chapters": [1, 2]}], "scope": {"include": ["…"], "exclude": ["…"]}, "evals": [{"name": "…", "fire": true, "prompt": "…", "expect": ["…"]}]}
+
+  # Agentic, with read access to the source books and write access to spec.md only
+  skill_spec: |
+      Write the source spec for an agent skill named "{{NAME}}". Renderers turn this one model-neutral spec into a SKILL.md for Claude and one for GPT, so it holds the content, not the wording for either model.
+
+      The approved recipe:
+
+      {{RECIPE}}
+
+      Sources, readable with your tools:
+
+      {{SOURCES}}
+
+      Start from each book's summary.md and the chapter extraction JSON files (concepts, principles, red flags, techniques, contrasts, examples). Open chapter text only when you need an example or more detail than the extraction has.
+
+      Write {{SPEC_PATH}} in Markdown with these sections:
+      - When to use: the situations from the recipe's description and scope, and near-misses where the skill does not apply.
+      - Procedure: for each kind of request the skill handles, how the agent works through it and what its answer contains.
+      - Concepts and red flags: each named idea from the books that the skill applies, with the author's name for it, how to recognize it in code or in a situation, why it matters, and the fix or alternative.
+      - Examples: two or three short worked examples, from the books where possible, each showing a situation and how the skill handles it.
+      - Pitfalls: specific mistakes an agent makes in this domain without the skill.
+
+      Write for an agent doing the work, not for a reader of the book: no chapter-by-chapter summary, no book history, no praise. Keep the author's terms. Stay inside the recipe's scope. Aim for 150-350 lines.
+
+  # Same access as skill_spec; the eval gate's failures follow the recipe
+  skill_revise: |
+      The skill "{{NAME}}" failed its eval gate. Its spec, {{SPEC_PATH}}, was written from this recipe:
+
+      {{RECIPE}}
+
+      Sources, readable with your tools:
+
+      {{SOURCES}}
+
+      Each failing case below was run several times with the skill loaded; it lists the prompt, the checks the runs missed, the judge's reason, and the start of the agent's response.
+
+      {{FAILURES}}
+
+      Edit {{SPEC_PATH}} so that an agent using it would pass these checks on requests like these, not only on these exact prompts. Work out why each check was missed: missing content (add it from the sources), content the agent didn't apply (make the procedure call for it), or guidance that led it astray (fix it). If a check looks wrong or unfair given the recipe, leave the spec as it is for that check and say so in your final line. Keep changes targeted, and keep everything that isn't implicated.
+
+  # Input: spec.md. {{GUIDE}} is the target model's prompting guide from guides/
+  skill_render: |
+      Render the skill spec that follows these instructions into the body of a SKILL.md read by {{READER}}. The frontmatter (name and description) is added separately, so output only the Markdown body, starting with a "# " title line.
+
+      Keep every procedure step, named concept, red flag, fix, and example from the spec. Change the wording, order, and structure to fit how this reader follows instructions, according to this guide:
+
+      <guide>
+      {{GUIDE}}
+      </guide>
+
+      Output the SKILL.md body only, with no preface and no code fence around it.

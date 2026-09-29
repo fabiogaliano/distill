@@ -32,5 +32,30 @@ export interface AppConfig {
   prompts: {
     extract: string;
     synthesize: string;
+    skill_plan: string;
+    skill_spec: string;
+    skill_revise: string;
+    skill_render: string;
+  };
+  skills: SkillsConfig;
+}
+
+// A skill is rendered once per target; each target has its own reader model,
+// prompting guide, and install location.
+export interface SkillTarget {
+  reader: string;
+  guide: string;
+  install: string;
+}
+
+export interface SkillsConfig {
+  targets: Record<string, SkillTarget>;
+  eval: {
+    // Only this target's variant goes through the eval gate.
+    target: string;
+    runs: number;
+    threshold: number;
+    attempts: number;
+    judge: string;
   };
 }

@@ -1,19 +1,29 @@
 #!/usr/bin/env bun
 import type { AppConfig, ModelSpec } from './types';
 import { createProvider } from './providers';
+import { claudeAgent } from './providers/claude-agent';
 import { createUI } from './ui';
-import { loadConfig, resolveStage } from './config';
+import { editText } from './ui/editor';
+import { loadConfig, repoPath, resolveStage } from './config';
 import { ingest } from './library/ingest';
 import { extractDir, requireBook, resolveLibraryRoot, writeBook } from './library/library';
 import { extractBook, type ChapterResult } from './pipeline/extract';
 import { synthesizeBook } from './pipeline/synthesize';
 import { connectEmber } from './anki/ember';
 import { pushBook } from './anki/push';
+import { assertSkillName, readRecipe, requireRecipe, skillDir, writeRecipe } from './skills/recipe';
+import { buildCatalog, proposeRecipe, reviewRecipe, type Decision } from './skills/plan';
+import { buildSkill } from './skills/build';
+import { claudePluginEval } from './skills/evals';
+import { installSkill } from './skills/install';
 
 interface Args {
   command?: string;
   target?: string;
+  // `skill <subcommand> <name>` shifts target to the name.
+  subcommand?: string;
   modelRole?: string;
+  books?: string[];
   interactive: boolean;
 }
 
@@ -23,11 +33,13 @@ function parseArgs(argv: string[]): Args {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--model') args.modelRole = argv[++i];
+    else if (arg === '--books') args.books = argv[++i]?.split(',').map(b => b.trim()).filter(Boolean);
     else if (arg === '-i' || arg === '--interactive') args.interactive = true;
     else if (arg === '-h' || arg === '--help') positional.unshift('help');
     else positional.push(arg);
   }
-  [args.command, args.target] = positional;
+  if (positional[0] === 'skill') [args.command, args.subcommand, args.target] = positional;
+  else [args.command, args.target] = positional;
   return args;
 }
 
@@ -42,12 +54,16 @@ Usage:
   glean extract <book> [-i]         Extract each selected chapter (cached, ${config.concurrency} at a time)
   glean synthesize <book>           Write summary.md from the extractions
   glean anki <book>                 Stage the book's new cards in Anki for review (via ember)
+  glean skill plan <name>           Propose a skill recipe from the library for you to approve
+  glean skill build <name>          Write the skill, render per model, and run the eval gate
+  glean skill install <name>        Symlink the built skill into Claude Code and pi
   glean completion zsh              Print the zsh completion script
 
-<book> is the slug that ingest prints.
+<book> is the slug that ingest prints. <name> is the skill's folder name (kebab-case).
 
 Options:
   -i, --interactive                 Pick which chapters to extract (saved to book.json)
+  --books <slug,…>                  skill plan: only consider these books
   --model <role>                    Model role for this run (${roles})
                                     Default per stage: ${stageDefaults}
   -h, --help                        Show this help
@@ -58,6 +74,7 @@ Examples:
   glean extract a-philosophy-of-software-design --model opus-low
   glean synthesize a-philosophy-of-software-design
   glean anki a-philosophy-of-software-design
+  glean skill plan deep-modules --books a-philosophy-of-software-design
 `);
 }
 
@@ -68,6 +85,7 @@ function printCompletion(shell: string | undefined, config: AppConfig): void {
   }
   const roles = Object.keys(config.models).join(' ');
   const books = `${resolveLibraryRoot(config.library)}/books`;
+  const skills = `${resolveLibraryRoot(config.library)}/skills`;
 
   console.log(`#compdef glean
 
@@ -75,6 +93,12 @@ _glean_books() {
   local -a books
   books=(\${(f)"$(command ls '${books}' 2>/dev/null)"})
   _describe 'book' books
+}
+
+_glean_skills() {
+  local -a skills
+  skills=(\${(f)"$(command ls '${skills}' 2>/dev/null)"})
+  _describe 'skill' skills
 }
 
 _glean() {
@@ -85,6 +109,7 @@ _glean() {
       'extract:Extract each selected chapter'
       'synthesize:Write summary.md from the extractions'
       'anki:Stage the book'"'"'s new cards in Anki for review'
+      'skill:Plan, build, or install a skill'
       'completion:Print the zsh completion script'
     )
     _describe 'command' commands
@@ -112,6 +137,13 @@ _glean() {
       ;;
     anki)
       _arguments '1:book:_glean_books'
+      ;;
+    skill)
+      _arguments -s \\
+        '--model[Model role for this run]:role:(${roles})' \\
+        '--books[Only consider these books]:book:_glean_books' \\
+        '1:subcommand:(plan build install)' \\
+        '2:skill:_glean_skills'
       ;;
     completion)
       _arguments '1:shell:(zsh)'
@@ -228,6 +260,130 @@ async function runAnki(args: Args, config: AppConfig): Promise<boolean> {
   return result.failed.length === 0;
 }
 
+function skillName(args: Args, usage: string): string {
+  if (!args.target) throw new Error(`Usage: ${usage}`);
+  assertSkillName(args.target);
+  return args.target;
+}
+
+const DECISIONS: { title: string; value: Decision }[] = [
+  { title: 'Approve and save recipe.yaml', value: 'approve' },
+  { title: 'Edit in $EDITOR', value: 'edit' },
+  { title: 'Regenerate with feedback', value: 'regenerate' },
+  { title: 'Quit without saving', value: 'quit' },
+];
+
+async function runSkillPlan(args: Args, config: AppConfig): Promise<void> {
+  const name = skillName(args, 'glean skill plan <name> [--books <slug,…>] [--model <role>]');
+  const root = resolveLibraryRoot(config.library);
+  const spec = resolveStage(config, 'skill', args.modelRole);
+  const provider = createProvider(spec);
+  const catalog = await buildCatalog(root, args.books);
+  if (catalog.notSynthesized.length > 0) {
+    console.log(`Not synthesized, left out: ${catalog.notSynthesized.join(', ')}`);
+  }
+
+  const propose = async (revision?: Parameters<typeof proposeRecipe>[0]['revision']) => {
+    console.log(`Planning ${name} from ${catalog.books.length} book(s) with ${describe(spec)}…`);
+    const { recipe, costUsd } = await proposeRecipe({ name, catalog, prompt: config.prompts.skill_plan, provider, revision });
+    console.log(`  $${costUsd.toFixed(2)} list price`);
+    return recipe;
+  };
+
+  const existing = await readRecipe(root, name);
+  if (existing) console.log(`Starting from the saved recipe.yaml`);
+  const ui = createUI(true);
+  const approved = await reviewRecipe({
+    initial: existing ?? (await propose()),
+    regenerate: propose,
+    ui: {
+      show: yaml => console.log(`\n${yaml}`),
+      decide: async canApprove => {
+        const choices = canApprove ? DECISIONS : DECISIONS.filter(d => d.value !== 'approve');
+        return (await ui.selectOne('Recipe', choices)) ?? 'quit';
+      },
+      feedback: () => ui.text('What should change?'),
+      edit: yaml => editText(yaml, `${name}.recipe.yaml`),
+      error: message => console.error(`\n${message}`),
+    },
+  });
+  if (!approved) {
+    console.log('Nothing saved.');
+    return;
+  }
+  console.log(`Saved ${await writeRecipe(root, approved)}`);
+  console.log(`Next: glean skill build ${name}`);
+}
+
+async function runSkillBuild(args: Args, config: AppConfig): Promise<boolean> {
+  const name = skillName(args, 'glean skill build <name> [--model <role>]');
+  const root = resolveLibraryRoot(config.library);
+  const spec = resolveStage(config, 'skill', args.modelRole);
+  const recipe = await requireRecipe(root, name);
+  const guides: Record<string, string> = {};
+  for (const [target, { guide }] of Object.entries(config.skills.targets)) {
+    guides[target] = await Bun.file(repoPath(guide)).text();
+  }
+
+  console.log(`Building ${name} with ${describe(spec)}`);
+  const result = await buildSkill({
+    root,
+    recipe,
+    skills: config.skills,
+    prompts: { spec: config.prompts.skill_spec, revise: config.prompts.skill_revise, render: config.prompts.skill_render },
+    guides,
+    agent: claudeAgent(spec),
+    provider: createProvider(spec),
+    evaluate: claudePluginEval,
+    concurrency: config.concurrency,
+    log: line => console.log(line),
+  });
+
+  const { aggregates, cases, failing, resultsPath, threshold } = result.report;
+  const { casesPassed, casesTotal, overallScore, meanDelta } = aggregates;
+  const without = cases.reduce((sum, c) => sum + (c.scoreWithout ?? 0), 0) / Math.max(cases.length, 1);
+  const delta = meanDelta === undefined ? '' : ` (${without.toFixed(2)} without, Δ ${meanDelta >= 0 ? '+' : ''}${meanDelta.toFixed(2)})`;
+  const cost = `$${result.costUsd.toFixed(2)}${result.reusedEval ? ', eval reused' : ''}`;
+
+  if (result.passed) {
+    console.log(`\n✓ ${name}: ${casesPassed}/${casesTotal} cases ≥ ${threshold} · score ${overallScore.toFixed(2)}${delta} · ${cost}`);
+    if (meanDelta !== undefined && meanDelta <= 0) {
+      console.log('  [!] No uplift over the baseline: the eval cases may not test what the skill adds.');
+    }
+    console.log(`  ${skillDir(root, name)} · install with: glean skill install ${name}`);
+    return true;
+  }
+
+  console.log(`\n✗ ${name}: still failing after ${result.attempts} attempt(s) · ${casesPassed}/${casesTotal} cases ≥ ${threshold} · ${cost}`);
+  for (const c of cases.filter(c => failing.includes(c.name))) console.log(`  ${c.name}: ${c.score.toFixed(2)}`);
+  console.log(`  Results: ${resultsPath}`);
+  console.log(`  Review spec.md or the recipe's eval cases (glean skill plan ${name}), then re-run the build.`);
+  return false;
+}
+
+async function runSkillInstall(args: Args, config: AppConfig): Promise<void> {
+  const name = skillName(args, 'glean skill install <name>');
+  const root = resolveLibraryRoot(config.library);
+  for (const r of await installSkill(root, name, config.skills.targets)) {
+    console.log(`${r.status === 'installed' ? '✓ linked' : '= already linked'} ${r.link}`);
+  }
+}
+
+async function runSkill(args: Args, config: AppConfig): Promise<boolean> {
+  switch (args.subcommand) {
+    case 'plan':
+      await runSkillPlan(args, config);
+      return true;
+    case 'build':
+      return runSkillBuild(args, config);
+    case 'install':
+      await runSkillInstall(args, config);
+      return true;
+    default:
+      throw new Error('Usage: glean skill <plan|build|install> <name>');
+  }
+}
+
 async function main(): Promise<void> {
   const config = await loadConfig();
   const args = parseArgs(Bun.argv.slice(2));
@@ -245,6 +401,9 @@ async function main(): Promise<void> {
         break;
       case 'anki':
         if (!(await runAnki(args, config))) process.exit(1);
+        break;
+      case 'skill':
+        if (!(await runSkill(args, config))) process.exit(1);
         break;
       case 'completion':
         printCompletion(args.target ?? 'zsh', config);

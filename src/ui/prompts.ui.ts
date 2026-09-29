@@ -60,4 +60,9 @@ export class PromptsUI implements UIProvider {
 
     return response.value;
   }
+
+  async text(message: string): Promise<string | undefined> {
+    const response = await prompts({ type: 'text', name: 'value', message });
+    return response.value?.trim() || undefined;
+  }
 }
