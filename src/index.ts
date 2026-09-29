@@ -305,7 +305,11 @@ async function main(): Promise<void> {
     console.log(`Mode: ${options.mode} | Model: ${options.model} | Output: ${options.singleFile ? 'single file' : 'folder'}`);
 
     for (const epubPath of epubFiles) {
-      await summarizeBook(epubPath, options);
+      try {
+        await summarizeBook(epubPath, options);
+      } catch (err) {
+        console.error(`\n[!] Skipping ${basename(epubPath)} due to error:`, err instanceof Error ? err.message : err);
+      }
     }
 
     console.log('\nAll done!');
