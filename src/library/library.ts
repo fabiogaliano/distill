@@ -19,6 +19,7 @@ export const bookDir = (root: string, slug: string) => join(booksDir(root), slug
 export const cacheDir = (root: string, slug: string) => join(bookDir(root, slug), 'cache');
 export const extractDir = (root: string, slug: string) => join(bookDir(root, slug), 'extract');
 export const summaryPath = (root: string, slug: string) => join(bookDir(root, slug), 'summary.md');
+export const ankiPath = (root: string, slug: string) => join(bookDir(root, slug), 'anki.json');
 
 export async function readBook(root: string, slug: string): Promise<LibraryBook | undefined> {
   const file = Bun.file(join(bookDir(root, slug), 'book.json'));

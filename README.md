@@ -25,6 +25,9 @@ glean extract a-philosophy-of-software-design -i
 # Write summary.md: a model-written overview plus the chapter notes
 glean synthesize a-philosophy-of-software-design
 
+# Stage new cards in Anki for review (deck Books::<Title>, via the ember MCP server)
+glean anki a-philosophy-of-software-design
+
 # Use another model role for one run, e.g. when quota is tight
 glean extract a-philosophy-of-software-design --model opus-low
 
@@ -44,10 +47,15 @@ books/<slug>/
 ├── chapters/      # markdown per chapter, from epub-chapter-splitter
 ├── cache/         # model responses keyed by input hash
 ├── extract/       # one JSON extraction per chapter
-└── summary.md     # overview + chapter notes
+├── summary.md     # overview + chapter notes
+└── anki.json      # cards already pushed to Anki, by stable ID
 ```
 
 Slugs come from the book's own title (subtitle dropped), not the file name.
+
+Anki cards come from the extraction (concept, contrast, red flag, scenario, and code cards) and go to the built-in Basic note type, tagged by chapter (`glean::<slug>::<nn>-<chapter>`) and card type (`glean::type::<type>`). They're sent to the ember Anki MCP server with `stageMany`, so they arrive suspended in your Anki Inbox and only reach reviews once you approve them there. A card's ID is its book plus normalized question, so re-running `glean anki` only stages questions it hasn't sent before.
+
+`glean anki` needs two environment variables: `GLEAN_ANKI_MCP_URL` (ember's MCP endpoint) and `GLEAN_ANKI_MCP_TOKEN` (its bearer token, without the `Bearer ` prefix).
 
 ## Configuration
 

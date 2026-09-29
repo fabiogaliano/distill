@@ -7,6 +7,8 @@ import { ingest } from './library/ingest';
 import { extractDir, requireBook, resolveLibraryRoot, writeBook } from './library/library';
 import { extractBook, type ChapterResult } from './pipeline/extract';
 import { synthesizeBook } from './pipeline/synthesize';
+import { connectEmber } from './anki/ember';
+import { pushBook } from './anki/push';
 
 interface Args {
   command?: string;
@@ -39,6 +41,7 @@ Usage:
   glean ingest <file.epub>          Split a book into the library (${config.library})
   glean extract <book> [-i]         Extract each selected chapter (cached, ${config.concurrency} at a time)
   glean synthesize <book>           Write summary.md from the extractions
+  glean anki <book>                 Stage the book's new cards in Anki for review (via ember)
   glean completion zsh              Print the zsh completion script
 
 <book> is the slug that ingest prints.
@@ -54,6 +57,7 @@ Examples:
   glean extract a-philosophy-of-software-design -i
   glean extract a-philosophy-of-software-design --model opus-low
   glean synthesize a-philosophy-of-software-design
+  glean anki a-philosophy-of-software-design
 `);
 }
 
@@ -80,6 +84,7 @@ _glean() {
       'ingest:Split a book into the library'
       'extract:Extract each selected chapter'
       'synthesize:Write summary.md from the extractions'
+      'anki:Stage the book'"'"'s new cards in Anki for review'
       'completion:Print the zsh completion script'
     )
     _describe 'command' commands
@@ -104,6 +109,9 @@ _glean() {
       _arguments -s \\
         '--model[Model role for this run]:role:(${roles})' \\
         '1:book:_glean_books'
+      ;;
+    anki)
+      _arguments '1:book:_glean_books'
       ;;
     completion)
       _arguments '1:shell:(zsh)'
@@ -201,6 +209,25 @@ async function runSynthesize(args: Args, config: AppConfig): Promise<void> {
   console.log(`  ${result.path}`);
 }
 
+async function runAnki(args: Args, config: AppConfig): Promise<boolean> {
+  if (!args.target) throw new Error('Usage: glean anki <book>');
+  const root = resolveLibraryRoot(config.library);
+  const book = await requireBook(root, args.target);
+
+  const anki = await connectEmber();
+  const result = await pushBook(root, args.target, book, anki).finally(() => anki.close());
+  const reused = result.alreadySent + result.duplicates;
+  console.log(`${result.deck}: ${result.staged} cards staged, ${reused} already in Anki, ${result.failed.length} failed`);
+  if (result.staged > 0) {
+    console.log(`  Staged cards are suspended until you approve them in Anki's Inbox (${result.batches.length} batch(es)).`);
+  }
+  if (result.notExtracted.length > 0) {
+    console.log(`  ${result.notExtracted.length} selected chapter(s) not extracted yet; run: glean extract ${args.target}`);
+  }
+  for (const { card, error } of result.failed) console.log(`  ✗ ${card.front.slice(0, 60)}: ${error}`);
+  return result.failed.length === 0;
+}
+
 async function main(): Promise<void> {
   const config = await loadConfig();
   const args = parseArgs(Bun.argv.slice(2));
@@ -215,6 +242,9 @@ async function main(): Promise<void> {
         break;
       case 'synthesize':
         await runSynthesize(args, config);
+        break;
+      case 'anki':
+        if (!(await runAnki(args, config))) process.exit(1);
         break;
       case 'completion':
         printCompletion(args.target ?? 'zsh', config);

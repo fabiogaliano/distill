@@ -10,10 +10,13 @@ export function kebab(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-// Subtitles and parentheticals ("(for hio hio)") make slugs long and edition-specific.
+// Subtitles and parentheticals ("(for hio hio)") make names long and edition-specific.
+export function shortTitle(title: string): string {
+  return title.split(':')[0]!.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+}
+
 export function bookSlug(title: string): string {
-  const main = title.split(':')[0]!.replace(/\([^)]*\)/g, '');
-  const slug = kebab(main);
+  const slug = kebab(shortTitle(title));
   if (slug.length <= MAX_SLUG_LENGTH) return slug;
   const cut = slug.slice(0, MAX_SLUG_LENGTH + 1);
   return cut.slice(0, cut.lastIndexOf('-'));
