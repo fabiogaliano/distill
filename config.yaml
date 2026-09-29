@@ -4,6 +4,9 @@ defaults:
   singleFile: true       # true = combined output, false = folder structure
   includeOverview: false # true = add book-level synthesis, false = chapters only
 
+# Library root: books/<slug>/ and skills/<name>/ live here
+library: ~/Core/library
+
 # Model roles. --model <role> overrides every stage for one run.
 models:
   opus:     { provider: claude-sdk, model: claude-opus-5-5, effort: medium }

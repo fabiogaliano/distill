@@ -51,6 +51,7 @@ export interface AppConfig {
     singleFile: boolean;
     includeOverview: boolean;
   };
+  library: string;
   models: Record<string, ModelSpec>;
   stages: Record<Stage, string>;
   prompts: {

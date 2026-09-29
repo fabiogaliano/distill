@@ -10,6 +10,8 @@ import { ChapterSummarizer } from './summarizer/chapter-summarizer';
 import { BookSummarizer } from './summarizer/book-summarizer';
 import { OutputWriter } from './output/writer';
 import { loadConfig, resolveStage } from './config';
+import { ingest } from './library/ingest';
+import { resolveLibraryRoot } from './library/library';
 
 // Output shell completion script
 function printCompletion(shell: string, config: AppConfig): void {
@@ -36,6 +38,15 @@ _glean() {
     '-h[Show help]'
     '--help[Show help]'
   )
+
+  if (( CURRENT == 2 )); then
+    _alternative 'commands:command:(ingest)' 'files:epub file:_files -g "*.epub"'
+    return
+  fi
+  if [[ $words[2] == ingest ]]; then
+    _files -g '*.epub'
+    return
+  fi
 
   _arguments -s $opts '*:epub file:_files -g "*.epub"'
 }
@@ -136,6 +147,7 @@ function printHelp(config: AppConfig): void {
 glean — AI-powered book summarizer
 
 Usage:
+  glean ingest <file.epub>          Split a book into the library (${config.library})
   glean <file.epub>                 Summarize a single book
   glean <dir>                       Summarize all epubs in a directory
 
@@ -277,9 +289,39 @@ async function summarizeBook(
   console.log(`  Done! Summary: ${summaryPath}`);
 }
 
+async function runIngest(epubPath: string | undefined, config: AppConfig): Promise<void> {
+  if (!epubPath?.endsWith('.epub')) {
+    console.error('Usage: glean ingest <file.epub>');
+    process.exit(1);
+  }
+
+  const { slug, dir, book, alreadyIngested } = await ingest(epubPath, resolveLibraryRoot(config.library));
+  const selected = book.chapters.filter(c => book.selected.includes(c.index));
+  const words = selected.reduce((sum, c) => sum + c.word_count, 0);
+
+  console.log(`${alreadyIngested ? 'Already ingested' : 'Ingested'}: ${book.title}${book.author ? ` — ${book.author}` : ''}`);
+  console.log(`  ${dir}`);
+  console.log(`  slug: ${slug}`);
+  console.log(`  ${selected.length} of ${book.chapters.length} chapters selected (${words} words)`);
+  if (words === 0) {
+    console.warn('  [!] The splitter extracted no text from the selected chapters.');
+  }
+}
+
 async function main(): Promise<void> {
   // Load config first
   const config = await loadConfig();
+
+  const [command, ...rest] = Bun.argv.slice(2);
+  if (command === 'ingest') {
+    try {
+      await runIngest(rest[0], config);
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+    return;
+  }
 
   const options = parseArgs(config);
   if (!options) {
