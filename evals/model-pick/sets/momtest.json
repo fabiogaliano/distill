@@ -1,0 +1,14 @@
+{
+  "id": "momtest",
+  "book": "The Mom Test by Rob Fitzpatrick",
+  "chapters": [
+    {
+      "file": "03_the_mom_test.md",
+      "title": "The Mom Test"
+    },
+    {
+      "file": "07_commitment_and_advancement.md",
+      "title": "Commitment and advancement"
+    }
+  ]
+}

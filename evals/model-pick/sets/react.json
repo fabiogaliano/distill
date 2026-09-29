@@ -1,0 +1,14 @@
+{
+  "id": "react",
+  "book": "React Key Concepts by Maximilian Schwarzm\u00fcller",
+  "chapters": [
+    {
+      "file": "09_handling_side_effects.md",
+      "title": "Handling Side Effects"
+    },
+    {
+      "file": "12_working_with_complex_state.md",
+      "title": "Working with Complex State"
+    }
+  ]
+}

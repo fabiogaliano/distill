@@ -1,0 +1,51 @@
+{
+  "id": "aposd",
+  "book": "A Philosophy of Software Design by John Ousterhout",
+  "chapters": [
+    {
+      "file": "05_2_the_nature_of_complexity.md",
+      "title": "2 The Nature of Complexity",
+      "items": [
+        "Complexity defined: anything related to the structure of a system that makes it hard to understand and modify",
+        "Complexity is weighted by where developers spend time (C = sum of c_p * t_p): isolating complexity where it's never seen is almost as good as eliminating it",
+        "Symptom: change amplification \u2014 a simple change requires modifications in many places",
+        "Symptom: cognitive load \u2014 how much a developer needs to know to complete a task",
+        "Symptom: unknown unknowns \u2014 not obvious what must change or what information is needed; the worst symptom",
+        "Cause: dependencies \u2014 code can't be understood or modified in isolation",
+        "Cause: obscurity \u2014 important information is not obvious",
+        "Complexity is incremental: it accumulates from many small dependencies and obscurities, so sweat the small stuff"
+      ]
+    },
+    {
+      "file": "08_5_information_hiding__and_leakage_.md",
+      "title": "5 Information Hiding (and Leakage)",
+      "items": [
+        "Information hiding: each module encapsulates design decisions/knowledge that don't appear in its interface",
+        "Red flag: Information Leakage \u2014 the same design decision/knowledge is reflected in multiple modules",
+        "Red flag: Temporal Decomposition \u2014 code structure follows execution order instead of information hiding",
+        "HTTP server example: reading and parsing a request split into separate classes leaks the request format; merge them",
+        "Classes can be made somewhat larger to hide information (too many small classes leak knowledge)",
+        "Red flag: Overexposure \u2014 an API forces users to learn rarely used features to use common ones",
+        "Defaults: interfaces should make the common case simple (e.g. HTTP response defaults)",
+        "Information hiding within a class: minimize the places each variable/detail is used",
+        "Taking it too far: don't hide information that is needed outside the module"
+      ]
+    },
+    {
+      "file": "13_10_define_errors_out_of_existence.md",
+      "title": "10 Define Errors Out Of Existence",
+      "items": [
+        "Exception handling is a major source of complexity; handling code is hard to write and test",
+        "Too many exceptions: throwing is easy but pushes complexity onto callers",
+        "Define errors out of existence: design APIs so the error condition can't arise",
+        "Example: file deletion \u2014 Unix lets a deleted-while-open file keep working vs Windows refusing deletion",
+        "Example: Java substring throwing on out-of-range indexes instead of clamping",
+        "Mask exceptions: handle the exceptional condition at a low level so higher levels never see it (e.g. TCP retransmission, NFS retry)",
+        "Exception aggregation: handle many exceptions with a single handler in one place (web server dispatch example)",
+        "Just crash: for errors that are rare and not worth handling (e.g. out of memory), crash with diagnostics",
+        "Design special cases out of existence (e.g. text editor selection that always exists, represented as empty when nothing is selected)",
+        "Taking it too far: don't mask or define away errors whose information callers need"
+      ]
+    }
+  ]
+}

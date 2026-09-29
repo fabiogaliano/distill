@@ -1,0 +1,14 @@
+{
+  "id": "lawsux",
+  "book": "Laws of UX by Jon Yablonski",
+  "chapters": [
+    {
+      "file": "04_4__hick_s_law.md",
+      "title": "4. Hick's Law"
+    },
+    {
+      "file": "09_9__tesler_s_law.md",
+      "title": "9. Tesler's Law"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "pme",
+  "book": "The Product-Minded Engineer by Drew Hoskins",
+  "chapters": [
+    {
+      "file": "04_3__errors_and_warnings.md",
+      "title": "3. Errors and Warnings"
+    },
+    {
+      "file": "13_9__product_architecture.md",
+      "title": "9. Product Architecture"
+    }
+  ]
+}
