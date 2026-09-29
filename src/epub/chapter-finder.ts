@@ -11,17 +11,19 @@ import { FRONT_MATTER, INTRO_TERMS, MIN_CONTENT_WORDS } from '../config';
  * 4. Fallback: skip chapters with <100 words at start
  */
 export function findContentStart(chapters: ChapterInfo[]): number {
-  // Priority 1: Look for "introduction" specifically
-  const introIndex = chapters.findIndex(c =>
-    normalize(c.title).includes('introduction')
+  const maxIntroIndex = Math.ceil(chapters.length * 0.4);
+
+  // Priority 1: Look for "introduction" specifically in the first 40% of the book
+  const introIndex = chapters.findIndex((c, idx) =>
+    idx < maxIntroIndex && normalize(c.title).includes('introduction')
   );
   if (introIndex !== -1) {
     return introIndex;
   }
 
-  // Priority 2: Find first intro term match
-  const firstIntroIndex = chapters.findIndex(c =>
-    INTRO_TERMS.some(term => normalize(c.title).includes(term))
+  // Priority 2: Find first intro term match in the first 40% of the book
+  const firstIntroIndex = chapters.findIndex((c, idx) =>
+    idx < maxIntroIndex && INTRO_TERMS.some(term => normalize(c.title).includes(term))
   );
   if (firstIntroIndex !== -1) {
     return firstIntroIndex;
