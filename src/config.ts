@@ -33,7 +33,7 @@ export const MIN_CONTENT_WORDS = 100;
 
 // Path to epub-chapter-splitter binary
 export const EPUB_SPLITTER_PATH = join(
-  dirname(dirname(import.meta.dir)),
+  dirname(import.meta.dirname),
   'epub-chapter-splitter/target/release/epub-chapter-splitter'
 );
 
@@ -43,7 +43,7 @@ let _config: AppConfig | null = null;
 export async function loadConfig(): Promise<AppConfig> {
   if (_config) return _config;
 
-  const configPath = join(dirname(import.meta.dir), 'config.yaml');
+  const configPath = join(dirname(import.meta.dirname), 'config.yaml');
   const content = await Bun.file(configPath).text();
   _config = parseYaml(content) as AppConfig;
   return _config;
