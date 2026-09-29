@@ -135,5 +135,5 @@ Replaces "open a Claude Code session, point at summary, run skill-creator" and `
 
 - ~~`claude -p` isolation flags~~ — superseded by the Agent SDK; isolation options verified (see Models).
 - ~~Installed Claude Code (2.1.283) doesn't recognize `claude-sonnet-5-5`~~ — moot: no Sonnet in any stage.
-- Extraction output: JSON schema vs markdown sections — decide when writing the prompt, test on Ousterhout.
+- ~~Extraction output: JSON schema vs markdown sections~~ — JSON: the model-pick eval's prompt (0 parse failures in 55 extractions, full recall of Ousterhout's key ideas) is the extraction prompt in `config.yaml`.
 - ~~Whether skill building should be agentic or plain calls~~ — agentic, via the Agent SDK with tools.

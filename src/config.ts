@@ -1,6 +1,6 @@
 import { join, dirname } from 'path';
 import { parse as parseYaml } from 'yaml';
-import type { AppConfig, ModelSpec, Stage, SummaryMode } from './types';
+import type { AppConfig, ModelSpec, Stage } from './types';
 
 // Front matter terms to skip (before book content starts)
 export const FRONT_MATTER = [
@@ -47,16 +47,6 @@ export async function loadConfig(): Promise<AppConfig> {
   const content = await Bun.file(configPath).text();
   _config = parseYaml(content) as AppConfig;
   return _config;
-}
-
-export function getConfig(): AppConfig {
-  if (!_config) throw new Error('Config not loaded. Call loadConfig() first.');
-  return _config;
-}
-
-export function getPrompt(mode: SummaryMode, type: 'chapter' | 'book'): string {
-  const config = getConfig();
-  return config.prompts[mode][type];
 }
 
 export function resolveStage(config: AppConfig, stage: Stage, roleOverride?: string): ModelSpec {

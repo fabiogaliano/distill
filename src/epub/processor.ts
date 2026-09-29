@@ -1,5 +1,4 @@
 import { join, dirname, basename } from 'path';
-import type { BookManifest, Chapter } from '../types';
 import { EPUB_SPLITTER_PATH } from '../config';
 
 export class EpubProcessor {
@@ -35,42 +34,5 @@ export class EpubProcessor {
       const error = await new Response(proc.stderr).text();
       throw new Error(`epub-splitter failed: ${error}`);
     }
-  }
-
-  async getManifest(): Promise<BookManifest> {
-    await this.ensureSplit();
-    const manifestPath = join(this.outputDir, 'book.json');
-    const manifest = await Bun.file(manifestPath).json();
-    return manifest as BookManifest;
-  }
-
-  async getChapter(filename: string): Promise<Chapter> {
-    const manifest = await this.getManifest();
-    const info = manifest.chapters.find(c => c.file === filename);
-    if (!info) {
-      throw new Error(`Chapter not found: ${filename}`);
-    }
-
-    const chapterPath = join(this.outputDir, 'chapters', filename);
-    const content = await Bun.file(chapterPath).text();
-
-    return { info, content };
-  }
-
-  async getAllChapters(): Promise<Chapter[]> {
-    const manifest = await this.getManifest();
-    const chapters: Chapter[] = [];
-
-    for (const info of manifest.chapters) {
-      const chapterPath = join(this.outputDir, 'chapters', info.file);
-      const content = await Bun.file(chapterPath).text();
-      chapters.push({ info, content });
-    }
-
-    return chapters;
-  }
-
-  getOutputDir(): string {
-    return this.outputDir;
   }
 }

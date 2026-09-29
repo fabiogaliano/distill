@@ -13,7 +13,7 @@ export class PromptsUI implements UIProvider {
     const response = await prompts({
       type: 'multiselect',
       name: 'chapters',
-      message: 'Select chapters to summarize',
+      message: 'Select chapters to extract',
       choices: chapters.map(c => ({
         title: `${String(c.index).padStart(2, '0')}. ${c.title} (${c.word_count} words)`,
         value: c.index,

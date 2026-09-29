@@ -1,19 +1,13 @@
-# Default execution settings (can be overridden by CLI flags)
-defaults:
-  mode: concise          # concise | detailed
-  singleFile: true       # true = combined output, false = folder structure
-  includeOverview: false # true = add book-level synthesis, false = chapters only
-
 # Library root: books/<slug>/ and skills/<name>/ live here
 library: ~/Core/library
 
 # Model roles. --model <role> overrides every stage for one run.
 models:
-  opus:     { provider: claude-sdk, model: claude-opus-5-5, effort: medium }
-  opus-low: { provider: claude-sdk, model: claude-opus-5-5, effort: low }
+  opus:      { provider: claude-sdk, model: claude-opus-5-5, effort: medium }
+  opus-low:  { provider: claude-sdk, model: claude-opus-5-5, effort: low }
   opus-high: { provider: claude-sdk, model: claude-opus-5-5, effort: high }
-  flash:    { provider: agy, model: gemini-3.5-flash-medium }
-  pro:      { provider: agy, model: gemini-3.1-pro-low }
+  flash:     { provider: agy, model: gemini-3.5-flash-medium }
+  pro:       { provider: agy, model: gemini-3.1-pro-low }
 
 # Which role each stage uses
 stages:
@@ -21,50 +15,56 @@ stages:
   synthesize: opus
   skill: opus
 
-# Prompts for each mode
+# Parallel model calls per book; subscriptions rate-limit bursts
+concurrency: 4
+
 prompts:
-  concise:
-    chapter: |
-      Summarize this chapter in 150-250 words.
+  # Model-picked with this prompt: evals/model-pick/ (keep them in sync when changing it)
+  extract: |
+      You are extracting the durable knowledge from one chapter of a technical book. The output feeds three uses: a reader skimming the book, Anki flashcards, and a Claude skill that applies the book's ideas to real work. Capture what a practitioner would need to recognize and apply the ideas, not a retelling of the chapter.
 
-      CRITICAL: Start directly with content. No titles, headers, or "Summary:" prefix.
+      Book: {{BOOK}}
+      Chapter: {{CHAPTER}}
 
-      If non-content (copyright, author bio, acknowledgments, empty), respond: SKIP
+      The chapter text follows these instructions.
 
-      Include main argument and 2-3 key takeaways. Be direct.
+      Respond with a single JSON object and nothing else, matching this shape:
 
-      Chapter: {{TITLE}}
+      {
+        "skip": false,
+        "summary": "3-6 sentences: the chapter's main argument and why it matters",
+        "concepts": [{ "name": "term as the author names it", "definition": "", "why_it_matters": "" }],
+        "principles": [{ "statement": "", "explanation": "" }],
+        "red_flags": [{ "name": "", "symptom": "how you notice it in real code or work", "fix": "" }],
+        "techniques": [{ "name": "", "steps": [""], "when_to_use": "" }],
+        "contrasts": [{ "a": "", "b": "", "difference": "", "when_to_pick": "" }],
+        "examples": [{ "description": "", "illustrates": "which concept or principle" }],
+        "cards": [{ "type": "concept | contrast | red_flag | scenario | code", "front": "", "back": "" }]
+      }
 
-    book: |
-      Write a 400-600 word summary of this book.
+      Rules:
+      - Use the author's own names for concepts, principles, and red flags. Don't rename or merge them.
+      - Only include what the chapter supports. An empty array is fine; an invented item is not.
+      - Each list item stands alone: someone reading only that item understands it.
+      - Cards test understanding, not recall of wording. Prefer scenario cards ("a method only forwards its arguments to another method — what's wrong and how do you fix it?") and contrast cards over definition cards. No cloze. Code cards only if the chapter's point depends on code. One idea per card; answers under 60 words.
+      - Write 5-12 cards, scaled to how much the chapter teaches.
+      - If the chapter has no teachable content (copyright, acknowledgments, index, author bio), respond with {"skip": true} only.
 
-      CRITICAL: Start directly with content. No title or headers like "# Book Title".
+  synthesize: |
+      You are writing the overview that opens a reading summary of one book. The chapter-by-chapter notes follow it in the same document, so the overview's job is the view across chapters: what the book argues and how its ideas fit together.
 
-      Synthesize main themes. Present unified narrative, not chapter-by-chapter recap.
+      Book: {{BOOK}}
+      Author: {{AUTHOR}}
 
-      Book: {{TITLE}} by {{AUTHOR}}
+      The structured notes for every chapter follow these instructions, as JSON.
 
-      Chapter summaries follow:
+      Write the overview in Markdown, 500-900 words:
+      - Open with the book's central argument in two or three sentences.
+      - Then the few ideas that carry the book, each under a ### heading, in the order they build on each other. Say where ideas from different chapters depend on or refine each other.
+      - End with a ### Where it applies section: concrete situations in real work where these ideas change what you would do.
 
-  detailed:
-    chapter: |
-      Summarize this chapter in 400-600 words.
-
-      CRITICAL: Start directly with content. No titles, headers, or "Summary:" prefix.
-
-      If non-content (copyright, author bio, acknowledgments, empty), respond: SKIP
-
-      Include main argument, 3-4 key takeaways with context, notable examples or research, and actionable steps if applicable.
-
-      Chapter: {{TITLE}}
-
-    book: |
-      Write a 1200-1600 word summary of this book.
-
-      CRITICAL: Start directly with content. No title or headers like "# Book Title".
-
-      Synthesize main themes across chapters. Include compelling examples. Present practical takeaways. Use ## headers for sections.
-
-      Book: {{TITLE}} by {{AUTHOR}}
-
-      Chapter summaries follow:
+      Rules:
+      - Use the author's names for concepts, principles, and red flags, exactly as they appear in the notes.
+      - Only state what the notes support.
+      - Don't walk through the chapters in order, and don't restate each chapter's summary.
+      - Start directly with the argument: no title, no "This book…" or "In this book…" opener, no closing recap paragraph.

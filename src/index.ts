@@ -1,299 +1,124 @@
 #!/usr/bin/env bun
-import { resolve, join, basename } from 'path';
-import { readdir, stat, rm, unlink } from 'fs/promises';
-import type { SummarizeOptions, Chapter, AppConfig, ModelSpec } from './types';
-import { EpubProcessor } from './epub/processor';
-import { getContentChapters } from './epub/chapter-finder';
+import type { AppConfig, ModelSpec } from './types';
 import { createProvider } from './providers';
 import { createUI } from './ui';
-import { ChapterSummarizer } from './summarizer/chapter-summarizer';
-import { BookSummarizer } from './summarizer/book-summarizer';
-import { OutputWriter } from './output/writer';
 import { loadConfig, resolveStage } from './config';
 import { ingest } from './library/ingest';
-import { resolveLibraryRoot } from './library/library';
+import { extractDir, requireBook, resolveLibraryRoot, writeBook } from './library/library';
+import { extractBook, type ChapterResult } from './pipeline/extract';
+import { synthesizeBook } from './pipeline/synthesize';
 
-// Output shell completion script
-function printCompletion(shell: string, config: AppConfig): void {
+interface Args {
+  command?: string;
+  target?: string;
+  modelRole?: string;
+  interactive: boolean;
+}
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = { interactive: false };
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--model') args.modelRole = argv[++i];
+    else if (arg === '-i' || arg === '--interactive') args.interactive = true;
+    else if (arg === '-h' || arg === '--help') positional.unshift('help');
+    else positional.push(arg);
+  }
+  [args.command, args.target] = positional;
+  return args;
+}
+
+function printHelp(config: AppConfig): void {
+  const roles = Object.keys(config.models).join(', ');
+  const stageDefaults = Object.entries(config.stages).map(([stage, role]) => `${stage}=${role}`).join(', ');
+  console.log(`
+glean — books into summaries, Anki cards, and skills
+
+Usage:
+  glean ingest <file.epub>          Split a book into the library (${config.library})
+  glean extract <book> [-i]         Extract each selected chapter (cached, ${config.concurrency} at a time)
+  glean synthesize <book>           Write summary.md from the extractions
+  glean completion zsh              Print the zsh completion script
+
+<book> is the slug that ingest prints.
+
+Options:
+  -i, --interactive                 Pick which chapters to extract (saved to book.json)
+  --model <role>                    Model role for this run (${roles})
+                                    Default per stage: ${stageDefaults}
+  -h, --help                        Show this help
+
+Examples:
+  glean ingest ~/Downloads/aposd.epub
+  glean extract a-philosophy-of-software-design -i
+  glean extract a-philosophy-of-software-design --model opus-low
+  glean synthesize a-philosophy-of-software-design
+`);
+}
+
+function printCompletion(shell: string | undefined, config: AppConfig): void {
   if (shell !== 'zsh') {
     console.error(`Unsupported shell: ${shell}. Only 'zsh' is supported.`);
     process.exit(1);
   }
+  const roles = Object.keys(config.models).join(' ');
+  const books = `${resolveLibraryRoot(config.library)}/books`;
 
   console.log(`#compdef glean
 
+_glean_books() {
+  local -a books
+  books=(\${(f)"$(command ls '${books}' 2>/dev/null)"})
+  _describe 'book' books
+}
+
 _glean() {
-  local -a opts
-  opts=(
-    '-o[Output directory]:directory:_files -/'
-    '--output[Output directory]:directory:_files -/'
-    '-m[Summary mode]:mode:(concise detailed)'
-    '--mode[Summary mode]:mode:(concise detailed)'
-    '--model[Model role for every stage]:role:(${Object.keys(config.models).join(' ')})'
-    '--single-file[Output to single combined file]'
-    '--overview[Include book-level synthesis]'
-    '--skip-existing[Skip if summaries exist]'
-    '-i[Interactive chapter selection]'
-    '--interactive[Interactive chapter selection]'
-    '-h[Show help]'
-    '--help[Show help]'
-  )
-
   if (( CURRENT == 2 )); then
-    _alternative 'commands:command:(ingest)' 'files:epub file:_files -g "*.epub"'
-    return
-  fi
-  if [[ $words[2] == ingest ]]; then
-    _files -g '*.epub'
+    local -a commands
+    commands=(
+      'ingest:Split a book into the library'
+      'extract:Extract each selected chapter'
+      'synthesize:Write summary.md from the extractions'
+      'completion:Print the zsh completion script'
+    )
+    _describe 'command' commands
     return
   fi
 
-  _arguments -s $opts '*:epub file:_files -g "*.epub"'
+  local command=$words[2]
+  shift words
+  (( CURRENT-- ))
+
+  case $command in
+    ingest)
+      _arguments '1:epub file:_files -g "*.epub"'
+      ;;
+    extract)
+      _arguments -s \\
+        '(-i --interactive)'{-i,--interactive}'[Pick which chapters to extract]' \\
+        '--model[Model role for this run]:role:(${roles})' \\
+        '1:book:_glean_books'
+      ;;
+    synthesize)
+      _arguments -s \\
+        '--model[Model role for this run]:role:(${roles})' \\
+        '1:book:_glean_books'
+      ;;
+    completion)
+      _arguments '1:shell:(zsh)'
+      ;;
+  esac
 }
 
 compdef _glean glean`);
 }
 
-// Parse CLI arguments (config provides defaults)
-function parseArgs(config: AppConfig): SummarizeOptions | null {
-  const args = Bun.argv.slice(2);
-
-  // Handle completion subcommand before anything else
-  if (args[0] === 'completion') {
-    printCompletion(args[1] || 'zsh', config);
-    process.exit(0);
-  }
-
-  if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
-    printHelp(config);
-    return null;
-  }
-
-  // First arg should be 'summarize' command or a path
-  let pathArg: string | undefined;
-  let restArgs: string[];
-
-  if (args[0] === 'summarize') {
-    pathArg = args[1];
-    restArgs = args.slice(2);
-  } else {
-    // Allow omitting 'summarize' command
-    pathArg = args[0];
-    restArgs = args.slice(1);
-  }
-
-  if (!pathArg) {
-    console.error('Error: No path provided');
-    printHelp(config);
-    return null;
-  }
-
-  // Start with config defaults
-  const options: SummarizeOptions = {
-    path: resolve(pathArg),
-    mode: config.defaults.mode,
-    singleFile: config.defaults.singleFile,
-    includeOverview: config.defaults.includeOverview,
-    skipExisting: false,
-    interactive: false,
-  };
-
-  // Parse remaining args (CLI flags override config defaults)
-  for (let i = 0; i < restArgs.length; i++) {
-    const arg = restArgs[i];
-    const next = restArgs[i + 1];
-
-    switch (arg) {
-      case '-o':
-      case '--output':
-        options.output = next ? resolve(next) : undefined;
-        i++;
-        break;
-      case '-m':
-      case '--mode':
-        if (next === 'concise' || next === 'detailed') {
-          options.mode = next;
-          i++;
-        }
-        break;
-      case '--model':
-        if (next) {
-          options.modelRole = next;
-          i++;
-        }
-        break;
-      case '--skip-existing':
-        options.skipExisting = true;
-        break;
-      case '-i':
-      case '--interactive':
-        options.interactive = true;
-        break;
-      case '--single-file':
-        options.singleFile = true;
-        break;
-      case '--overview':
-        options.includeOverview = true;
-        break;
-    }
-  }
-
-  return options;
-}
-
-function printHelp(config: AppConfig): void {
-  const stageDefaults = Object.entries(config.stages).map(([stage, role]) => `${stage}=${role}`).join(', ');
-  console.log(`
-glean — AI-powered book summarizer
-
-Usage:
-  glean ingest <file.epub>          Split a book into the library (${config.library})
-  glean <file.epub>                 Summarize a single book
-  glean <dir>                       Summarize all epubs in a directory
-
-Options:
-  -m, --mode <concise|detailed>     Summary depth (default: concise)
-  -o, --output <dir>                Output directory (default: alongside epub)
-  -i, --interactive                 Pick chapters to include
-  --single-file                     Combine everything into one file
-  --overview                        Add a book-level synthesis
-  --skip-existing                   Skip already-summarized books
-  --model <role>                    Model role for every stage (${Object.keys(config.models).join(', ')})
-                                    Default per stage: ${stageDefaults}
-  -h, --help                        Show this help
-
-Examples:
-  glean book.epub
-  glean book.epub -m detailed --overview
-  glean ./library/ --skip-existing
-  glean book.epub -i --single-file
-  glean book.epub --model opus-low
-`);
-}
-
-async function findEpubFiles(path: string): Promise<string[]> {
-  const pathStat = await stat(path);
-
-  if (pathStat.isFile()) {
-    if (path.endsWith('.epub')) {
-      return [path];
-    }
-    throw new Error(`Not an epub file: ${path}`);
-  }
-
-  if (pathStat.isDirectory()) {
-    const files = await readdir(path);
-    return files
-      .filter(f => f.endsWith('.epub'))
-      .map(f => join(path, f));
-  }
-
-  throw new Error(`Invalid path: ${path}`);
-}
-
-async function summarizeBook(
-  epubPath: string,
-  options: SummarizeOptions,
-  models: { extract: ModelSpec; synthesize: ModelSpec }
-): Promise<void> {
-  const bookName = basename(epubPath, '.epub');
-  console.log(`\nProcessing: ${bookName}`);
-
-  // Initialize processor
-  const processor = new EpubProcessor(epubPath, options.output);
-  const outputDir = processor.getOutputDir();
-
-  // Check if already summarized
-  if (options.skipExisting) {
-    const summaryPath = join(outputDir, `summary-${options.mode}.md`);
-    if (await Bun.file(summaryPath).exists()) {
-      console.log(`  Skipping (summary exists)`);
-      return;
-    }
-  }
-
-  // Get manifest and find content chapters
-  console.log('  Reading book structure...');
-  const manifest = await processor.getManifest();
-  const autoSelectedChapters = getContentChapters(manifest.chapters);
-  const autoSelectedIndices = autoSelectedChapters.map(c => c.index);
-
-  // Let user select chapters if interactive mode
-  const ui = createUI(options.interactive);
-  const selectedIndices = await ui.selectChapters(manifest.chapters, autoSelectedIndices);
-
-  if (selectedIndices.length === 0) {
-    console.log('  No chapters selected, skipping');
-    return;
-  }
-
-  // Filter to selected chapters
-  const selectedChapterInfos = manifest.chapters.filter(c => selectedIndices.includes(c.index));
-  const skippedCount = manifest.chapters.length - selectedChapterInfos.length;
-
-  console.log(`  ${selectedChapterInfos.length} chapters to summarize (skipped ${skippedCount})`);
-
-  // Load selected chapters
-  const chapters: Chapter[] = [];
-  for (const info of selectedChapterInfos) {
-    const chapterPath = join(outputDir, 'chapters', info.file);
-    const content = await Bun.file(chapterPath).text();
-    chapters.push({ info, content });
-  }
-
-  // Initialize components
-  const chapterSummarizer = new ChapterSummarizer(createProvider(models.extract), options.mode);
-  const bookSummarizer = new BookSummarizer(createProvider(models.synthesize), options.mode);
-  const writer = new OutputWriter(outputDir, options.mode);
-
-  // Summarize chapters
-  console.log('  Summarizing chapters...');
-  const chapterSummaries = await chapterSummarizer.summarizeAll(
-    chapters,
-    (current, total, title) => {
-      console.log(`     [${current}/${total}] ${title}`);
-    }
-  );
-
-  const bookTitle = manifest.title ?? bookName;
-  const bookAuthor = manifest.author ?? 'Unknown';
-
-  // Create book overview (optional)
-  let bookSummary = null;
-  if (options.includeOverview) {
-    console.log('  Creating book overview...');
-    bookSummary = await bookSummarizer.summarize(
-      chapterSummaries,
-      bookTitle,
-      bookAuthor
-    );
-  }
-
-  // Write output
-  let summaryPath: string;
-  if (options.singleFile) {
-    summaryPath = await writer.writeCombinedSummary(chapterSummaries, bookTitle, bookAuthor, bookSummary);
-  } else {
-    await writer.writeChapterSummaries(chapterSummaries);
-    if (bookSummary) {
-      summaryPath = await writer.writeBookSummary(bookSummary);
-    } else {
-      summaryPath = join(outputDir, `summaries/${options.mode}`);
-    }
-  }
-
-  // Cleanup epub-splitter artifacts
-  await rm(join(outputDir, 'chapters'), { recursive: true, force: true });
-  await unlink(join(outputDir, 'book.json')).catch(() => {});
-
-  console.log(`  Done! Summary: ${summaryPath}`);
-}
+const describe = (spec: ModelSpec) => (spec.effort ? `${spec.model}@${spec.effort}` : spec.model);
+const seconds = (ms: number) => `${Math.round(ms / 1000)}s`;
 
 async function runIngest(epubPath: string | undefined, config: AppConfig): Promise<void> {
-  if (!epubPath?.endsWith('.epub')) {
-    console.error('Usage: glean ingest <file.epub>');
-    process.exit(1);
-  }
+  if (!epubPath?.endsWith('.epub')) throw new Error('Usage: glean ingest <file.epub>');
 
   const { slug, dir, book, alreadyIngested } = await ingest(epubPath, resolveLibraryRoot(config.library));
   const selected = book.chapters.filter(c => book.selected.includes(c.index));
@@ -308,52 +133,101 @@ async function runIngest(epubPath: string | undefined, config: AppConfig): Promi
   }
 }
 
+const STATUS_LABEL: Record<ChapterResult['status'], string> = {
+  extracted: '✓',
+  cached: '✓ cached',
+  current: '= up to date',
+  short: '– too short, skipped',
+  failed: '✗',
+};
+
+async function runExtract(args: Args, config: AppConfig): Promise<boolean> {
+  if (!args.target) throw new Error('Usage: glean extract <book> [-i] [--model <role>]');
+  const root = resolveLibraryRoot(config.library);
+  const slug = args.target;
+  const spec = resolveStage(config, 'extract', args.modelRole);
+  const book = await requireBook(root, slug);
+
+  if (args.interactive) {
+    book.selected = await createUI(true).selectChapters(book.chapters, book.selected);
+    await writeBook(root, slug, book);
+  }
+
+  console.log(`Extracting ${book.selected.length} chapters of ${book.title} with ${describe(spec)}`);
+  const results = await extractBook({
+    root,
+    slug,
+    book,
+    provider: createProvider(spec),
+    prompt: config.prompts.extract,
+    concurrency: config.concurrency,
+    onChapter: (r, done, total) => {
+      const detail =
+        r.status === 'extracted' ? ` (${seconds(r.durationMs)}, $${r.costUsd.toFixed(2)})` : r.error ? `: ${r.error}` : '';
+      console.log(`  [${done}/${total}] ${STATUS_LABEL[r.status]} ${r.chapter.title}${detail}`);
+    },
+  });
+
+  const count = (status: ChapterResult['status']) => results.filter(r => r.status === status).length;
+  const cost = results.reduce((sum, r) => sum + r.costUsd, 0);
+  console.log(
+    `\n${count('extracted')} extracted, ${count('cached') + count('current')} reused, ${count('short')} too short, ${count('failed')} failed · $${cost.toFixed(2)} list price`
+  );
+  console.log(`  ${extractDir(root, slug)}`);
+  if (count('failed') > 0) {
+    console.log('Re-run the same command to retry the failed chapters; finished ones are reused.');
+    return false;
+  }
+  return true;
+}
+
+async function runSynthesize(args: Args, config: AppConfig): Promise<void> {
+  if (!args.target) throw new Error('Usage: glean synthesize <book> [--model <role>]');
+  const root = resolveLibraryRoot(config.library);
+  const slug = args.target;
+  const spec = resolveStage(config, 'synthesize', args.modelRole);
+  const book = await requireBook(root, slug);
+
+  console.log(`Synthesizing ${book.title} with ${describe(spec)}`);
+  const result = await synthesizeBook({
+    root,
+    slug,
+    book,
+    provider: createProvider(spec),
+    prompt: config.prompts.synthesize,
+  });
+  const cost = result.cached ? 'overview reused' : `$${result.costUsd.toFixed(2)} list price`;
+  console.log(`  ${result.chapters} chapters · ${cost}`);
+  console.log(`  ${result.path}`);
+}
+
 async function main(): Promise<void> {
-  // Load config first
   const config = await loadConfig();
-
-  const [command, ...rest] = Bun.argv.slice(2);
-  if (command === 'ingest') {
-    try {
-      await runIngest(rest[0], config);
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error);
-      process.exit(1);
-    }
-    return;
-  }
-
-  const options = parseArgs(config);
-  if (!options) {
-    process.exit(0);
-  }
+  const args = parseArgs(Bun.argv.slice(2));
 
   try {
-    // Resolved up front so a bad role fails once instead of once per book.
-    const models = {
-      extract: resolveStage(config, 'extract', options.modelRole),
-      synthesize: resolveStage(config, 'synthesize', options.modelRole),
-    };
-    const epubFiles = await findEpubFiles(options.path);
-
-    if (epubFiles.length === 0) {
-      console.error('No epub files found');
-      process.exit(1);
+    switch (args.command) {
+      case 'ingest':
+        await runIngest(args.target, config);
+        break;
+      case 'extract':
+        if (!(await runExtract(args, config))) process.exit(1);
+        break;
+      case 'synthesize':
+        await runSynthesize(args, config);
+        break;
+      case 'completion':
+        printCompletion(args.target ?? 'zsh', config);
+        break;
+      case undefined:
+      case 'help':
+        printHelp(config);
+        break;
+      default:
+        console.error(`Unknown command: ${args.command}`);
+        printHelp(config);
+        process.exit(1);
     }
-
-    console.log(`Found ${epubFiles.length} book(s) to summarize`);
-    const describe = (spec: ModelSpec) => (spec.effort ? `${spec.model}@${spec.effort}` : spec.model);
-    console.log(`Mode: ${options.mode} | Extract: ${describe(models.extract)} | Synthesize: ${describe(models.synthesize)} | Output: ${options.singleFile ? 'single file' : 'folder'}`);
-
-    for (const epubPath of epubFiles) {
-      try {
-        await summarizeBook(epubPath, options, models);
-      } catch (err) {
-        console.error(`\n[!] Skipping ${basename(epubPath)} due to error:`, err instanceof Error ? err.message : err);
-      }
-    }
-
-    console.log('\nAll done!');
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error);
     process.exit(1);

@@ -1,109 +1,70 @@
 # glean
 
-CLI tool to summarize documents and books with AI.
-
-## Features
-
-- Auto-detect and skip front/back matter (covers, dedications, etc.)
-- Two summary modes: concise (quick overview) or detailed (with examples)
-- Interactive chapter selection with `-i` flag
-- Model roles in `config.yaml`: each stage names a role (provider, model, effort); Claude runs through the Agent SDK
-- Progress tracking with chapter-by-chapter logging
-- Outputs both individual chapter summaries and complete book summaries
+Turns books (EPUB) into readable summaries, Anki cards, and Claude/GPT skills. Built for technical books: extraction keeps the author's named concepts, principles, red flags, and techniques rather than retelling chapters.
 
 ## Installation
 
 ```bash
-git clone --recursive git@github.com:fabiogaliano/docs-summarizer.git
-cd docs-summarizer
+git clone --recursive git@github.com:fabiogaliano/docs-summarizer.git glean
+cd glean
 make install
 ```
 
 ## Usage
 
 ```bash
-# Summarize a single EPUB
-glean ./book.epub
+# Split a book into the library; prints its slug
+glean ingest ./book.epub
 
-# Summarize all EPUBs in a folder
-glean ./books/
+# Extract every selected chapter (cached, concurrent)
+glean extract a-philosophy-of-software-design
 
-# Interactive mode - select chapters manually
-glean ./book.epub -i
+# Pick the chapters yourself first (saved for later runs)
+glean extract a-philosophy-of-software-design -i
 
-# Specify output directory
-glean ./book.epub -o ./output/
+# Write summary.md: a model-written overview plus the chapter notes
+glean synthesize a-philosophy-of-software-design
 
-# Detailed mode with examples
-glean ./book.epub -m detailed
+# Use another model role for one run, e.g. when quota is tight
+glean extract a-philosophy-of-software-design --model opus-low
 
-# Use a different model role for every stage
-glean ./book.epub --model opus-low
-
-# Skip if already summarized
-glean ./books/ --skip-existing
+# zsh completion (commands, book slugs, model roles)
+glean completion zsh > "${fpath[1]}/_glean"
 ```
 
-## Options
+Each stage reads and writes the library on disk and is safe to re-run. `extract` caches every model response by chapter text, prompt, model, and effort, so a re-run only calls the model for chapters where one of those changed, and an interrupted run picks up where it stopped.
+
+## Library
+
+The root is `library:` in `config.yaml` (default `~/Core/library`).
 
 ```
--o, --output <dir>     Output directory (default: same as epub)
--m, --mode <mode>      Summary mode: concise (default) or detailed
---model <role>         Model role from config.yaml for every stage (default: per stage)
---skip-existing        Skip if summaries already exist
--i, --interactive      Interactively select chapters to summarize
--h, --help             Show this help
+books/<slug>/
+├── book.json      # title, author, chapters, source epub path, selected chapters
+├── chapters/      # markdown per chapter, from epub-chapter-splitter
+├── cache/         # model responses keyed by input hash
+├── extract/       # one JSON extraction per chapter
+└── summary.md     # overview + chapter notes
 ```
 
-## Output Structure
+Slugs come from the book's own title (subtitle dropped), not the file name.
 
+## Configuration
+
+`config.yaml` holds everything tunable:
+
+- `models`: named roles → `{ provider, model, effort }`. Claude runs through the Claude Agent SDK on your subscription, isolated from your Claude Code settings, tools, and MCP servers.
+- `stages`: which role `extract`, `synthesize`, and `skill` use.
+- `concurrency`: parallel model calls per book.
+- `prompts`: the extraction and synthesis prompts. The extraction prompt is the one the model was picked with (`evals/model-pick/`).
+
+## Development
+
+```bash
+bun run test                           # Vitest
+cd epub-chapter-splitter && cargo test # splitter
+bun run scripts/eval-models.ts --rank  # model-pick eval (cached results reused)
 ```
-{book-name}/
-├── book.json                 # Manifest from epub-splitter
-├── chapters/                 # Raw markdown chapters
-├── summaries/
-│   ├── concise/
-│   │   ├── 01_introduction.md
-│   │   ├── 02_chapter_1.md
-│   │   └── ...
-│   └── detailed/
-│       ├── 01_introduction.md
-│       └── ...
-├── summary-concise.md        # Quick book overview
-└── summary-detailed.md       # Rich book summary
-```
-
-## Architecture
-
-### Layers
-
-- **EPUB Processing**: Handles file splitting and chapter detection
-- **Providers**: Claude Agent SDK (isolated from user settings, tools, and MCP servers) and the `agy` CLI
-- **Summarizers**: Chapter and book-level summarization logic
-- **UI**: Interactive chapter selection with `prompts` library
-- **Output**: File writing and formatting
-
-### Smart Chapter Detection
-
-Automatically skips:
-- Front matter (covers, dedications, tables of contents)
-- Back matter (indexes, bibliography, acknowledgments)
-
-Prefers starting from:
-1. "Introduction" chapter
-2. First preface/prologue/foreword
-3. After last front matter section
-
-### Summary Modes
-
-**Concise** (~200-300 words per chapter):
-- Key points only
-- Quick overview suitable for rapid reading
-
-**Detailed** (~500-800 words per chapter):
-- Includes notable examples and case studies
-- Practical takeaways for non-fiction
-- Better context preservation
 
 ## Requirements
 
@@ -116,9 +77,3 @@ Prefers starting from:
 ```bash
 make uninstall
 ```
-
-## Future
-
-- Batch processing with progress reporting
-- Custom prompt templates
-- Highlight extraction
