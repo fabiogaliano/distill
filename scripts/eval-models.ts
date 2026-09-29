@@ -6,23 +6,16 @@
 //   bun run scripts/eval-models.ts [--sets id,id] [--only model@effort,...] [--runs N] [--concurrency N] [--rank]
 import { join, dirname } from 'path';
 import { mkdir, readdir } from 'fs/promises';
+import { ClaudeSdkProvider } from '../src/providers/claude-sdk.provider';
+import type { Completion } from '../src/providers';
 
 const EVAL_DIR = join(dirname(import.meta.dir), 'evals/model-pick');
 const RESULTS_DIR = join(EVAL_DIR, 'results');
 
 // agy bakes effort into the model name, so effort is optional.
-interface ModelSpec { provider: 'claude' | 'pi' | 'agy'; model: string; effort?: string }
+interface ModelSpec { provider: 'claude-sdk' | 'pi' | 'agy'; model: string; effort?: string }
 interface SetChapter { file: string; title: string; items?: string[] }
 interface EvalSet { id: string; book: string; chapters: SetChapter[] }
-interface CallResult {
-  text: string;
-  stopReason: string | null;
-  isError: boolean;
-  outputTokens: number;
-  thinkingTokens: number;
-  costUsd: number;
-  durationMs: number;
-}
 interface Grade {
   gold: { item: string; score: number; note?: string }[];
   unsupported: { claim: string; why: string }[];
@@ -34,7 +27,7 @@ interface Row {
   set: string;
   chapter: string;
   run: number;
-  call?: CallResult;
+  call?: Completion;
   parsed: boolean;
   grade?: Grade;
 }
@@ -57,8 +50,10 @@ function parseArgs() {
   };
 }
 
-async function callModel(spec: ModelSpec, prompt: string, stdin: string): Promise<CallResult> {
-  if (spec.provider === 'claude') return callClaude(spec, prompt, stdin);
+async function callModel(spec: ModelSpec, prompt: string, stdin: string): Promise<Completion> {
+  if (spec.provider === 'claude-sdk') {
+    return new ClaudeSdkProvider({ provider: 'claude-sdk', model: spec.model, effort: spec.effort }).complete(prompt, stdin);
+  }
 
   // pi and agy are used only as rankers, so text is all we need from them; neither
   // reports usage in print mode. -nt / no --dangerously-skip-permissions keep them tool-free.
@@ -87,44 +82,6 @@ async function callModel(spec: ModelSpec, prompt: string, stdin: string): Promis
     thinkingTokens: 0,
     costUsd: 0,
     durationMs: Date.now() - started,
-  };
-}
-
-async function callClaude(spec: ModelSpec, prompt: string, stdin: string): Promise<CallResult> {
-  // Isolation flags keep my CLAUDE.md, MCP servers, and tools out of the call while
-  // still using subscription auth (--bare would require an API key).
-  const proc = Bun.spawn(
-    [
-      'claude', '-p',
-      '--model', spec.model,
-      '--effort', spec.effort ?? 'medium',
-      '--output-format', 'json',
-      '--strict-mcp-config',
-      '--setting-sources', '',
-      '--tools', '',
-      '--system-prompt', 'You follow the instructions in the user message exactly.',
-      prompt,
-    ],
-    { stdin: new Response(stdin), stdout: 'pipe', stderr: 'pipe', cwd: '/tmp' }
-  );
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) throw new Error(`claude exited ${code}: ${err || out.slice(0, 500)}`);
-
-  const events = JSON.parse(out) as any[];
-  const result = events.find(e => e.type === 'result');
-  if (!result) throw new Error('no result event in claude output');
-  return {
-    text: result.result ?? '',
-    stopReason: result.stop_reason ?? null,
-    isError: Boolean(result.is_error),
-    outputTokens: result.usage?.output_tokens ?? 0,
-    thinkingTokens: result.usage?.output_tokens_details?.thinking_tokens ?? 0,
-    costUsd: result.total_cost_usd ?? 0,
-    durationMs: result.duration_ms ?? 0,
   };
 }
 
@@ -273,7 +230,7 @@ function buildReport(rows: Row[], ids: string[], judge: ModelSpec): string {
   const lines = [
     '# Model pick — chapter extraction',
     '',
-    `Judge: ${specId(judge)}. Gold columns cover only chapters with gold items. Cost is list-price USD from the CLI, used as a relative quota measure.`,
+    `Judge: ${specId(judge)}. Gold columns cover only chapters with gold items. Cost is list-price USD reported by the Agent SDK, used as a relative quota measure.`,
     '',
     '| candidate | chapters | gold recall | unsupported / ch | cards (1-5) | usefulness (1-5) | parse fails | out tok / ch | $ / ch | sec / ch |',
     '|---|---|---|---|---|---|---|---|---|---|',

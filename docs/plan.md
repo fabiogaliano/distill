@@ -40,7 +40,7 @@ Decided 2026-09-29. Single user (me). Books in → readable summaries, Anki card
   - Cost per chapter (list price): opus low $0.199, medium $0.218, high $0.237; sonnet medium $0.095, high $0.110. Time: opus medium 56s, high 64s.
   - Opus medium and high are effectively tied on quality; medium is ~9% cheaper and faster, and it's the model's default.
   - Cross-checked with graders from other model families (same 22 blind comparisons each). Avg rank of `claude-opus-5-5@medium` per grader: `claude-opus-5-5@high` 2.18 (1st), `openai-codex/gpt-6-astra@high` 2.64 (1st), `Gemini 3.8 Flash (High)` 2.09 (tied 1st with opus@high). Combined over 66 rankings: opus@medium 2.30, opus@high 2.50, opus@low 3.12, sonnet@high 3.23, sonnet@medium 3.85. Claude self-preference isn't driving the result.
-- Quota fallback: `claude-opus-5-5@low`.
+- Quota fallback: `claude-opus-5-5@low`. With quota to spare: `claude-opus-5-5@high` (tied with medium on quality, most #1 picks).
 - No Sonnet 5.5 for extraction: consistently ranked below every Opus level, at medium and at high.
 - **Every stage uses `claude-opus-5-5@medium`** (extraction, synthesis, skill building). Final.
 - Parse the **last JSON value** in the response; treat `max_tokens` stops as failures.
@@ -57,8 +57,9 @@ Decided 2026-09-29. Single user (me). Books in → readable summaries, Anki card
 models:
   opus:        { provider: claude-sdk, model: claude-opus-5-5,   effort: medium }
   opus-low:    { provider: claude-sdk, model: claude-opus-5-5,   effort: low }
+  opus-high:   { provider: claude-sdk, model: claude-opus-5-5,   effort: high }
 stages:
-  extract: opus      # swap to opus-low if quota bites
+  extract: opus      # opus-low if quota bites, opus-high if quota is plentiful
   synthesize: opus
   skill: opus
 ```

@@ -7,7 +7,7 @@ CLI tool to summarize documents and books with AI.
 - Auto-detect and skip front/back matter (covers, dedications, etc.)
 - Two summary modes: concise (quick overview) or detailed (with examples)
 - Interactive chapter selection with `-i` flag
-- Modular provider architecture (Claude CLI by default, extensible for other APIs)
+- Model roles in `config.yaml`: each stage names a role (provider, model, effort); Claude runs through the Agent SDK
 - Progress tracking with chapter-by-chapter logging
 - Outputs both individual chapter summaries and complete book summaries
 
@@ -37,8 +37,8 @@ glean ./book.epub -o ./output/
 # Detailed mode with examples
 glean ./book.epub -m detailed
 
-# Use a different model
-glean ./book.epub --model sonnet
+# Use a different model role for every stage
+glean ./book.epub --model opus-low
 
 # Skip if already summarized
 glean ./books/ --skip-existing
@@ -49,8 +49,7 @@ glean ./books/ --skip-existing
 ```
 -o, --output <dir>     Output directory (default: same as epub)
 -m, --mode <mode>      Summary mode: concise (default) or detailed
---provider <provider>  AI provider: claude-cli (default)
---model <model>        Model to use (default: haiku)
+--model <role>         Model role from config.yaml for every stage (default: per stage)
 --skip-existing        Skip if summaries already exist
 -i, --interactive      Interactively select chapters to summarize
 -h, --help             Show this help
@@ -79,7 +78,7 @@ glean ./books/ --skip-existing
 ### Layers
 
 - **EPUB Processing**: Handles file splitting and chapter detection
-- **Providers**: Pluggable AI backends (Claude CLI, future: OpenAI, Anthropic API)
+- **Providers**: Claude Agent SDK (isolated from user settings, tools, and MCP servers) and the `agy` CLI
 - **Summarizers**: Chapter and book-level summarization logic
 - **UI**: Interactive chapter selection with `prompts` library
 - **Output**: File writing and formatting
@@ -110,7 +109,7 @@ Prefers starting from:
 
 - [Bun](https://bun.sh) runtime
 - [Rust](https://rustup.rs) toolchain (to build epub-chapter-splitter)
-- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) configured and available in PATH
+- A Claude subscription signed in through [Claude Code](https://docs.anthropic.com/en/docs/claude-code); the Agent SDK reuses that login, no API key
 
 ## Uninstall
 
@@ -120,9 +119,6 @@ make uninstall
 
 ## Future
 
-- PDF support
-- DOCX support
-- Additional AI providers (OpenAI, Anthropic API, Ollama)
 - Batch processing with progress reporting
 - Custom prompt templates
 - Highlight extraction

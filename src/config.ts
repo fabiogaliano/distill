@@ -1,6 +1,6 @@
 import { join, dirname } from 'path';
 import { parse as parseYaml } from 'yaml';
-import type { AppConfig, SummaryMode } from './types';
+import type { AppConfig, ModelSpec, Stage, SummaryMode } from './types';
 
 // Front matter terms to skip (before book content starts)
 export const FRONT_MATTER = [
@@ -59,8 +59,13 @@ export function getPrompt(mode: SummaryMode, type: 'chapter' | 'book'): string {
   return config.prompts[mode][type];
 }
 
-// Legacy export for providers - uses config default
-export function getDefaultModel(): string {
-  const config = getConfig();
-  return config.defaults.model;
+export function resolveStage(config: AppConfig, stage: Stage, roleOverride?: string): ModelSpec {
+  const role = roleOverride ?? config.stages[stage];
+  const spec = config.models[role];
+  if (!spec) {
+    throw new Error(
+      `Unknown model role "${role}" for stage ${stage}. Roles in config.yaml: ${Object.keys(config.models).join(', ')}`
+    );
+  }
+  return spec;
 }

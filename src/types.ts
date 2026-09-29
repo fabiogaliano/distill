@@ -20,22 +20,24 @@ export interface Chapter {
 // Summary modes
 export type SummaryMode = 'concise' | 'detailed';
 
-// Provider types
-export type ProviderType = 'claude-cli' | 'anthropic-api' | 'openai' | 'agy';
+export type ProviderType = 'claude-sdk' | 'agy';
 
-export interface ProviderOptions {
-  model?: string;
-  maxTokens?: number;
-  temperature?: number;
+// agy bakes effort into the model name, so effort is optional.
+export interface ModelSpec {
+  provider: ProviderType;
+  model: string;
+  effort?: string;
 }
+
+export type Stage = 'extract' | 'synthesize' | 'skill';
 
 // CLI options
 export interface SummarizeOptions {
   path: string;
   output?: string;
   mode: SummaryMode;
-  provider: ProviderType;
-  model: string;
+  // Role from config.yaml `models`, applied to every stage of the run.
+  modelRole?: string;
   skipExisting: boolean;
   interactive: boolean;
   singleFile: boolean;
@@ -46,11 +48,11 @@ export interface SummarizeOptions {
 export interface AppConfig {
   defaults: {
     mode: SummaryMode;
-    model: string;
-    provider: ProviderType;
     singleFile: boolean;
     includeOverview: boolean;
   };
+  models: Record<string, ModelSpec>;
+  stages: Record<Stage, string>;
   prompts: {
     concise: { chapter: string; book: string };
     detailed: { chapter: string; book: string };

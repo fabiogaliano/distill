@@ -1,6 +1,16 @@
-import type { ProviderOptions } from '../types';
+import type { ModelSpec } from '../types';
 
-export interface SummaryProvider {
-  name: string;
-  summarize(content: string, prompt: string, options?: ProviderOptions): Promise<string>;
+export interface Completion {
+  text: string;
+  stopReason: string | null;
+  isError: boolean;
+  outputTokens: number;
+  thinkingTokens: number;
+  costUsd: number;
+  durationMs: number;
+}
+
+export interface Provider {
+  readonly spec: ModelSpec;
+  complete(prompt: string, input: string): Promise<Completion>;
 }

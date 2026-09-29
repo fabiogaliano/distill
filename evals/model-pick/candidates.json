@@ -1,15 +1,15 @@
 {
-  "judge": { "provider": "claude", "model": "claude-opus-5-5", "effort": "high" },
+  "judge": { "provider": "claude-sdk", "model": "claude-opus-5-5", "effort": "high" },
   "rankers": [
-    { "provider": "claude", "model": "claude-opus-5-5", "effort": "high" },
+    { "provider": "claude-sdk", "model": "claude-opus-5-5", "effort": "high" },
     { "provider": "pi", "model": "openai-codex/gpt-6-astra", "effort": "high" },
     { "provider": "agy", "model": "Gemini 3.8 Flash (High)" }
   ],
   "candidates": [
-    { "provider": "claude", "model": "claude-opus-5-5", "effort": "low" },
-    { "provider": "claude", "model": "claude-opus-5-5", "effort": "medium" },
-    { "provider": "claude", "model": "claude-opus-5-5", "effort": "high" },
-    { "provider": "claude", "model": "claude-sonnet-5-5", "effort": "medium" },
-    { "provider": "claude", "model": "claude-sonnet-5-5", "effort": "high" }
+    { "provider": "claude-sdk", "model": "claude-opus-5-5", "effort": "low" },
+    { "provider": "claude-sdk", "model": "claude-opus-5-5", "effort": "medium" },
+    { "provider": "claude-sdk", "model": "claude-opus-5-5", "effort": "high" },
+    { "provider": "claude-sdk", "model": "claude-sonnet-5-5", "effort": "medium" },
+    { "provider": "claude-sdk", "model": "claude-sonnet-5-5", "effort": "high" }
   ]
 }

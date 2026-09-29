@@ -1,5 +1,5 @@
-import type { SummaryMode, ProviderOptions } from '../types';
-import type { SummaryProvider } from '../providers';
+import type { SummaryMode } from '../types';
+import { completeText, type Provider } from '../providers';
 import type { ChapterSummary } from './chapter-summarizer';
 import { getModeConfig } from './modes';
 
@@ -11,18 +11,12 @@ export interface BookSummary {
 }
 
 export class BookSummarizer {
-  private provider: SummaryProvider;
+  private provider: Provider;
   private mode: SummaryMode;
-  private options: ProviderOptions;
 
-  constructor(
-    provider: SummaryProvider,
-    mode: SummaryMode,
-    options: ProviderOptions = {}
-  ) {
+  constructor(provider: Provider, mode: SummaryMode) {
     this.provider = provider;
     this.mode = mode;
-    this.options = options;
   }
 
   async summarize(
@@ -42,11 +36,7 @@ export class BookSummarizer {
       .replace('{{AUTHOR}}', bookAuthor)
       .replace('{{CHAPTER_COUNT}}', String(chapterSummaries.length));
 
-    const summary = await this.provider.summarize(
-      combinedSummaries,
-      prompt,
-      this.options
-    );
+    const summary = await completeText(this.provider, prompt, combinedSummaries);
 
     return {
       title: bookTitle,

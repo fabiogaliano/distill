@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { resolve, join, basename } from 'path';
 import { readdir, stat, rm, unlink } from 'fs/promises';
-import type { SummarizeOptions, SummaryMode, ProviderType, Chapter, ChapterInfo, AppConfig } from './types';
+import type { SummarizeOptions, Chapter, AppConfig, ModelSpec } from './types';
 import { EpubProcessor } from './epub/processor';
 import { getContentChapters } from './epub/chapter-finder';
 import { createProvider } from './providers';
@@ -9,10 +9,10 @@ import { createUI } from './ui';
 import { ChapterSummarizer } from './summarizer/chapter-summarizer';
 import { BookSummarizer } from './summarizer/book-summarizer';
 import { OutputWriter } from './output/writer';
-import { loadConfig, getConfig } from './config';
+import { loadConfig, resolveStage } from './config';
 
 // Output shell completion script
-function printCompletion(shell: string): void {
+function printCompletion(shell: string, config: AppConfig): void {
   if (shell !== 'zsh') {
     console.error(`Unsupported shell: ${shell}. Only 'zsh' is supported.`);
     process.exit(1);
@@ -27,8 +27,7 @@ _glean() {
     '--output[Output directory]:directory:_files -/'
     '-m[Summary mode]:mode:(concise detailed)'
     '--mode[Summary mode]:mode:(concise detailed)'
-    '--provider[AI provider]:provider:(claude-cli agy)'
-    '--model[Model to use]:model:(haiku sonnet opus flash pro)'
+    '--model[Model role for every stage]:role:(${Object.keys(config.models).join(' ')})'
     '--single-file[Output to single combined file]'
     '--overview[Include book-level synthesis]'
     '--skip-existing[Skip if summaries exist]'
@@ -50,12 +49,12 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
 
   // Handle completion subcommand before anything else
   if (args[0] === 'completion') {
-    printCompletion(args[1] || 'zsh');
+    printCompletion(args[1] || 'zsh', config);
     process.exit(0);
   }
 
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
-    printHelp();
+    printHelp(config);
     return null;
   }
 
@@ -74,7 +73,7 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
 
   if (!pathArg) {
     console.error('Error: No path provided');
-    printHelp();
+    printHelp(config);
     return null;
   }
 
@@ -82,8 +81,6 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
   const options: SummarizeOptions = {
     path: resolve(pathArg),
     mode: config.defaults.mode,
-    provider: config.defaults.provider,
-    model: config.defaults.model,
     singleFile: config.defaults.singleFile,
     includeOverview: config.defaults.includeOverview,
     skipExisting: false,
@@ -108,15 +105,9 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
           i++;
         }
         break;
-      case '--provider':
-        if (next) {
-          options.provider = next as ProviderType;
-          i++;
-        }
-        break;
       case '--model':
         if (next) {
-          options.model = next;
+          options.modelRole = next;
           i++;
         }
         break;
@@ -139,7 +130,8 @@ function parseArgs(config: AppConfig): SummarizeOptions | null {
   return options;
 }
 
-function printHelp(): void {
+function printHelp(config: AppConfig): void {
+  const stageDefaults = Object.entries(config.stages).map(([stage, role]) => `${stage}=${role}`).join(', ');
   console.log(`
 glean — AI-powered book summarizer
 
@@ -154,8 +146,8 @@ Options:
   --single-file                     Combine everything into one file
   --overview                        Add a book-level synthesis
   --skip-existing                   Skip already-summarized books
-  --model <haiku|sonnet|opus|flash|pro> Model to use (default: haiku)
-  --provider <provider>             AI provider (default: claude-cli) (supports: claude-cli, agy)
+  --model <role>                    Model role for every stage (${Object.keys(config.models).join(', ')})
+                                    Default per stage: ${stageDefaults}
   -h, --help                        Show this help
 
 Examples:
@@ -163,6 +155,7 @@ Examples:
   glean book.epub -m detailed --overview
   glean ./library/ --skip-existing
   glean book.epub -i --single-file
+  glean book.epub --model opus-low
 `);
 }
 
@@ -188,7 +181,8 @@ async function findEpubFiles(path: string): Promise<string[]> {
 
 async function summarizeBook(
   epubPath: string,
-  options: SummarizeOptions
+  options: SummarizeOptions,
+  models: { extract: ModelSpec; synthesize: ModelSpec }
 ): Promise<void> {
   const bookName = basename(epubPath, '.epub');
   console.log(`\nProcessing: ${bookName}`);
@@ -236,9 +230,8 @@ async function summarizeBook(
   }
 
   // Initialize components
-  const provider = createProvider(options.provider);
-  const chapterSummarizer = new ChapterSummarizer(provider, options.mode, { model: options.model });
-  const bookSummarizer = new BookSummarizer(provider, options.mode, { model: options.model });
+  const chapterSummarizer = new ChapterSummarizer(createProvider(models.extract), options.mode);
+  const bookSummarizer = new BookSummarizer(createProvider(models.synthesize), options.mode);
   const writer = new OutputWriter(outputDir, options.mode);
 
   // Summarize chapters
@@ -294,6 +287,11 @@ async function main(): Promise<void> {
   }
 
   try {
+    // Resolved up front so a bad role fails once instead of once per book.
+    const models = {
+      extract: resolveStage(config, 'extract', options.modelRole),
+      synthesize: resolveStage(config, 'synthesize', options.modelRole),
+    };
     const epubFiles = await findEpubFiles(options.path);
 
     if (epubFiles.length === 0) {
@@ -302,11 +300,12 @@ async function main(): Promise<void> {
     }
 
     console.log(`Found ${epubFiles.length} book(s) to summarize`);
-    console.log(`Mode: ${options.mode} | Model: ${options.model} | Output: ${options.singleFile ? 'single file' : 'folder'}`);
+    const describe = (spec: ModelSpec) => (spec.effort ? `${spec.model}@${spec.effort}` : spec.model);
+    console.log(`Mode: ${options.mode} | Extract: ${describe(models.extract)} | Synthesize: ${describe(models.synthesize)} | Output: ${options.singleFile ? 'single file' : 'folder'}`);
 
     for (const epubPath of epubFiles) {
       try {
-        await summarizeBook(epubPath, options);
+        await summarizeBook(epubPath, options, models);
       } catch (err) {
         console.error(`\n[!] Skipping ${basename(epubPath)} due to error:`, err instanceof Error ? err.message : err);
       }

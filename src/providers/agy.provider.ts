@@ -1,40 +1,36 @@
-import type { SummaryProvider } from './types';
-import type { ProviderOptions } from '../types';
-import { getDefaultModel } from '../config';
+import type { ModelSpec } from '../types';
+import type { Completion, Provider } from './types';
 
-export class AgyProvider implements SummaryProvider {
-  name = 'agy';
+export class AgyProvider implements Provider {
+  constructor(readonly spec: ModelSpec) {}
 
-  async summarize(
-    content: string,
-    prompt: string,
-    options?: ProviderOptions
-  ): Promise<string> {
-    let model = options?.model ?? getDefaultModel();
+  async complete(prompt: string, input: string): Promise<Completion> {
+    const started = Date.now();
+    const proc = Bun.spawn(['agy', '-p', prompt, '--model', this.spec.model], {
+      stdin: new Response(input),
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
-    if (model === 'flash') {
-      model = 'gemini-3.5-flash-medium';
-    } else if (model === 'pro') {
-      model = 'gemini-3.1-pro-low';
-    }
-
-    const proc = Bun.spawn(
-      ['agy', '-p', prompt, '--model', model],
-      {
-        stdin: new Response(content),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      }
-    );
-
-    const output = await new Response(proc.stdout).text();
-    const error = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    const [output, error, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
 
     if (exitCode !== 0) {
       throw new Error(`Agy CLI failed: ${error}`);
     }
 
-    return output.trim();
+    // agy's print mode reports no stop reason or usage.
+    return {
+      text: output,
+      stopReason: null,
+      isError: false,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      costUsd: 0,
+      durationMs: Date.now() - started,
+    };
   }
 }
