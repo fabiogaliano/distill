@@ -8,6 +8,8 @@ import { join, dirname } from 'path';
 import { mkdir, readdir } from 'fs/promises';
 import { ClaudeSdkProvider } from '../src/providers/claude-sdk.provider';
 import type { Completion } from '../src/providers';
+import { parseLastJson } from '../src/json';
+import { pool } from '../src/pool';
 
 const EVAL_DIR = join(dirname(import.meta.dir), 'evals/model-pick');
 const RESULTS_DIR = join(EVAL_DIR, 'results');
@@ -85,40 +87,6 @@ async function callModel(spec: ModelSpec, prompt: string, stdin: string): Promis
   };
 }
 
-// Models sometimes write a draft or reasoning before the final JSON, so take the
-// last complete top-level value rather than the span from first "{" to last "}".
-function parseLastJson(text: string): unknown | undefined {
-  let last: unknown;
-  let i = 0;
-  while (i < text.length) {
-    if (text[i] !== '{') { i++; continue; }
-    const end = findObjectEnd(text, i);
-    if (end === -1) { i++; continue; }
-    try {
-      last = JSON.parse(text.slice(i, end + 1));
-      i = end + 1;
-    } catch {
-      i++;
-    }
-  }
-  return last;
-}
-
-function findObjectEnd(text: string, start: number): number {
-  let depth = 0;
-  let inString = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (ch === '\\') i++;
-      else if (ch === '"') inString = false;
-    } else if (ch === '"') inString = true;
-    else if (ch === '{') depth++;
-    else if (ch === '}' && --depth === 0) return i;
-  }
-  return -1;
-}
-
 async function cached<T>(path: string, produce: () => Promise<T>): Promise<T> {
   const file = Bun.file(path);
   if (await file.exists()) return file.json();
@@ -126,19 +94,6 @@ async function cached<T>(path: string, produce: () => Promise<T>): Promise<T> {
   await mkdir(dirname(path), { recursive: true });
   await Bun.write(path, JSON.stringify(value, null, 2));
   return value;
-}
-
-async function pool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
-  const results: T[] = new Array(tasks.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < tasks.length) {
-      const i = next++;
-      results[i] = await tasks[i]!();
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
-  return results;
 }
 
 const fill = (template: string, vars: Record<string, string>) =>
