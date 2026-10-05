@@ -69,7 +69,7 @@ describe('pushBook', () => {
     expect(anki.decks).toEqual(new Set(['Books::A Philosophy of Software Design']));
     expect(anki.notes.find(n => n.fields.Front === 'What makes a module deep?')).toMatchObject({
       modelName: 'Basic',
-      tags: [`glean::${SLUG}::00-chapter-1-deep-modules`, 'glean::type::concept'],
+      tags: [`distill::${SLUG}::00-chapter-1-deep-modules`, 'distill::type::concept'],
     });
     expect(anki.notes[0]!.fields.Back).toContain('<small>Chapter 1: Deep Modules</small>');
   });

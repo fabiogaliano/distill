@@ -176,7 +176,7 @@ export function describeFailures(report: GateReport): string {
 // `claude plugin eval` takes a skill folder whose evals/ holds the cases, so the
 // variant and suite are staged together in a temp dir named after the skill.
 export const claudePluginEval: Evaluate = async request => {
-  const stage = await mkdtemp(join(tmpdir(), 'glean-eval-'));
+  const stage = await mkdtemp(join(tmpdir(), 'distill-eval-'));
   const target = join(stage, request.skill);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outDir = join(request.resultsDir, stamp);

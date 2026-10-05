@@ -9,7 +9,7 @@ import type { BookManifest } from '../src/types';
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'glean-library-'));
+  root = await mkdtemp(join(tmpdir(), 'distill-library-'));
 });
 
 afterEach(async () => {

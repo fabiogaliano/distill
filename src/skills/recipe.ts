@@ -116,7 +116,7 @@ export async function readRecipe(root: string, name: string): Promise<Recipe | u
 
 export async function requireRecipe(root: string, name: string): Promise<Recipe> {
   const recipe = await readRecipe(root, name);
-  if (!recipe) throw new Error(`No recipe for skill "${name}". Run: glean skill plan ${name}`);
+  if (!recipe) throw new Error(`No recipe for skill "${name}". Run: distill skill plan ${name}`);
   return recipe;
 }
 

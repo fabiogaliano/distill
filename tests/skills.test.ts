@@ -75,7 +75,7 @@ describe('eval suite', () => {
   });
 
   it('replaces stale cases but keeps results', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'glean-suite-'));
+    const dir = await mkdtemp(join(tmpdir(), 'distill-suite-'));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     await mkdir(join(dir, 'dropped-case'), { recursive: true });
     await Bun.write(join(dir, 'results', 'old.json'), '{}');
@@ -248,7 +248,7 @@ describe('render', () => {
 describe('installSkill', () => {
   async function setup() {
     const { root } = await library();
-    const home = await mkdtemp(join(tmpdir(), 'glean-home-'));
+    const home = await mkdtemp(join(tmpdir(), 'distill-home-'));
     cleanup.push(() => rm(home, { recursive: true, force: true }));
     const targets = {
       claude: { reader: 'Claude', guide: 'g', install: join(home, '.claude', 'skills') },
@@ -281,6 +281,6 @@ describe('installSkill', () => {
   it('requires a build first', async () => {
     const { root, targets } = await setup();
     await rm(skillPath(root, 'gpt'), { recursive: true });
-    await expect(installSkill(root, 'deep-modules', targets)).rejects.toThrow('Run: glean skill build deep-modules');
+    await expect(installSkill(root, 'deep-modules', targets)).rejects.toThrow('Run: distill skill build deep-modules');
   });
 });

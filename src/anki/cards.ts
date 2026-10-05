@@ -21,13 +21,13 @@ export function cardsFromExtractions(slug: string, extractions: ChapterExtractio
   const cards = new Map<string, Card>();
   for (const { chapter, extraction } of extractions) {
     if (extraction.skip) continue;
-    const chapterTag = `glean::${slug}::${String(chapter.index).padStart(2, '0')}-${kebab(chapter.title)}`;
+    const chapterTag = `distill::${slug}::${String(chapter.index).padStart(2, '0')}-${kebab(chapter.title)}`;
     for (const card of extraction.cards ?? []) {
       if (!card.front?.trim() || !card.back?.trim()) continue;
       const id = cardId(slug, card.front);
       const type = kebab(card.type || 'concept').replaceAll('-', '_');
       if (!cards.has(id)) {
-        cards.set(id, { id, chapter: chapter.title, type, front: card.front, back: card.back, tags: [chapterTag, `glean::type::${type}`] });
+        cards.set(id, { id, chapter: chapter.title, type, front: card.front, back: card.back, tags: [chapterTag, `distill::type::${type}`] });
       }
     }
   }

@@ -71,7 +71,7 @@ describe('synthesizeBook', () => {
 
     await expect(
       synthesizeBook({ root: lib.root, slug: SLUG, book: lib.book, provider: fakeProvider(() => ({})), prompt: 'x' })
-    ).rejects.toThrow(`Run: glean extract ${SLUG}`);
+    ).rejects.toThrow(`Run: distill extract ${SLUG}`);
   });
 });
 

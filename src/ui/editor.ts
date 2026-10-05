@@ -5,7 +5,7 @@ import { join } from 'path';
 // Opens text in $VISUAL / $EDITOR and returns what was saved.
 export async function editText(text: string, filename: string): Promise<string> {
   const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
-  const dir = await mkdtemp(join(tmpdir(), 'glean-edit-'));
+  const dir = await mkdtemp(join(tmpdir(), 'distill-edit-'));
   const path = join(dir, filename);
   try {
     await Bun.write(path, text);

@@ -1,10 +1,10 @@
 {
-  "name": "glean",
+  "name": "distill",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "bin": {
-    "glean": "./src/index.ts"
+    "distill": "./src/index.ts"
   },
   "scripts": {
     "setup": "bun run scripts/setup.ts",

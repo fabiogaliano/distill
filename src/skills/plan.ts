@@ -73,7 +73,7 @@ export async function proposeRecipe(options: {
   revision?: Revision;
 }): Promise<{ recipe: Recipe; costUsd: number }> {
   const { name, catalog, provider, revision } = options;
-  if (catalog.books.length === 0) throw new Error('No synthesized books to plan from. Run: glean synthesize <book>');
+  if (catalog.books.length === 0) throw new Error('No synthesized books to plan from. Run: distill synthesize <book>');
 
   const prompt = options.prompt.replaceAll('{{NAME}}', name);
   let input = catalogText(catalog);

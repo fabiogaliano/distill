@@ -150,6 +150,6 @@ describe('buildSkill', () => {
   it('asks for the missing pipeline step when a source is not ready', async () => {
     const { root, options } = await setup([]);
     await rm(summaryPath(root, SLUG));
-    await expect(buildSkill(options())).rejects.toThrow(`Run: glean synthesize ${SLUG}`);
+    await expect(buildSkill(options())).rejects.toThrow(`Run: distill synthesize ${SLUG}`);
   });
 });

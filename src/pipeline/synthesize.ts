@@ -60,7 +60,7 @@ async function loadExtractions(root: string, slug: string, book: LibraryBook): P
   }
   if (missing.length > 0) {
     throw new Error(
-      `${missing.length} selected chapter(s) have no extraction yet (${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', …' : ''}). Run: glean extract ${slug}`
+      `${missing.length} selected chapter(s) have no extraction yet (${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', …' : ''}). Run: distill extract ${slug}`
     );
   }
   return extractions;

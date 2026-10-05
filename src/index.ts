@@ -47,17 +47,17 @@ function printHelp(config: AppConfig): void {
   const roles = Object.keys(config.models).join(', ');
   const stageDefaults = Object.entries(config.stages).map(([stage, role]) => `${stage}=${role}`).join(', ');
   console.log(`
-glean — books into summaries, Anki cards, and skills
+distill — books into summaries, Anki cards, and skills
 
 Usage:
-  glean ingest <file.epub>          Split a book into the library (${config.library})
-  glean extract <book> [-i]         Extract each selected chapter (cached, ${config.concurrency} at a time)
-  glean synthesize <book>           Write summary.md from the extractions
-  glean anki <book>                 Stage the book's new cards in Anki for review (via ember)
-  glean skill plan <name>           Propose a skill recipe from the library for you to approve
-  glean skill build <name>          Write the skill, render per model, and run the eval gate
-  glean skill install <name>        Symlink the built skill into Claude Code and pi
-  glean completion zsh              Print the zsh completion script
+  distill ingest <file.epub>          Split a book into the library (${config.library})
+  distill extract <book> [-i]         Extract each selected chapter (cached, ${config.concurrency} at a time)
+  distill synthesize <book>           Write summary.md from the extractions
+  distill anki <book>                 Stage the book's new cards in Anki for review (via ember)
+  distill skill plan <name>           Propose a skill recipe from the library for you to approve
+  distill skill build <name>          Write the skill, render per model, and run the eval gate
+  distill skill install <name>        Symlink the built skill into Claude Code and pi
+  distill completion zsh              Print the zsh completion script
 
 <book> is the slug that ingest prints. <name> is the skill's folder name (kebab-case).
 
@@ -69,12 +69,12 @@ Options:
   -h, --help                        Show this help
 
 Examples:
-  glean ingest ~/Downloads/aposd.epub
-  glean extract a-philosophy-of-software-design -i
-  glean extract a-philosophy-of-software-design --model opus-low
-  glean synthesize a-philosophy-of-software-design
-  glean anki a-philosophy-of-software-design
-  glean skill plan deep-modules --books a-philosophy-of-software-design
+  distill ingest ~/Downloads/aposd.epub
+  distill extract a-philosophy-of-software-design -i
+  distill extract a-philosophy-of-software-design --model opus-low
+  distill synthesize a-philosophy-of-software-design
+  distill anki a-philosophy-of-software-design
+  distill skill plan deep-modules --books a-philosophy-of-software-design
 `);
 }
 
@@ -87,21 +87,21 @@ function printCompletion(shell: string | undefined, config: AppConfig): void {
   const books = `${resolveLibraryRoot(config.library)}/books`;
   const skills = `${resolveLibraryRoot(config.library)}/skills`;
 
-  console.log(`#compdef glean
+  console.log(`#compdef distill
 
-_glean_books() {
+_distill_books() {
   local -a books
   books=(\${(f)"$(command ls '${books}' 2>/dev/null)"})
   _describe 'book' books
 }
 
-_glean_skills() {
+_distill_skills() {
   local -a skills
   skills=(\${(f)"$(command ls '${skills}' 2>/dev/null)"})
   _describe 'skill' skills
 }
 
-_glean() {
+_distill() {
   if (( CURRENT == 2 )); then
     local -a commands
     commands=(
@@ -128,22 +128,22 @@ _glean() {
       _arguments -s \\
         '(-i --interactive)'{-i,--interactive}'[Pick which chapters to extract]' \\
         '--model[Model role for this run]:role:(${roles})' \\
-        '1:book:_glean_books'
+        '1:book:_distill_books'
       ;;
     synthesize)
       _arguments -s \\
         '--model[Model role for this run]:role:(${roles})' \\
-        '1:book:_glean_books'
+        '1:book:_distill_books'
       ;;
     anki)
-      _arguments '1:book:_glean_books'
+      _arguments '1:book:_distill_books'
       ;;
     skill)
       _arguments -s \\
         '--model[Model role for this run]:role:(${roles})' \\
-        '--books[Only consider these books]:book:_glean_books' \\
+        '--books[Only consider these books]:book:_distill_books' \\
         '1:subcommand:(plan build install)' \\
-        '2:skill:_glean_skills'
+        '2:skill:_distill_skills'
       ;;
     completion)
       _arguments '1:shell:(zsh)'
@@ -151,14 +151,14 @@ _glean() {
   esac
 }
 
-compdef _glean glean`);
+compdef _distill distill`);
 }
 
 const describe = (spec: ModelSpec) => (spec.effort ? `${spec.model}@${spec.effort}` : spec.model);
 const seconds = (ms: number) => `${Math.round(ms / 1000)}s`;
 
 async function runIngest(epubPath: string | undefined, config: AppConfig): Promise<void> {
-  if (!epubPath?.endsWith('.epub')) throw new Error('Usage: glean ingest <file.epub>');
+  if (!epubPath?.endsWith('.epub')) throw new Error('Usage: distill ingest <file.epub>');
 
   const { slug, dir, book, alreadyIngested } = await ingest(epubPath, resolveLibraryRoot(config.library));
   const selected = book.chapters.filter(c => book.selected.includes(c.index));
@@ -182,7 +182,7 @@ const STATUS_LABEL: Record<ChapterResult['status'], string> = {
 };
 
 async function runExtract(args: Args, config: AppConfig): Promise<boolean> {
-  if (!args.target) throw new Error('Usage: glean extract <book> [-i] [--model <role>]');
+  if (!args.target) throw new Error('Usage: distill extract <book> [-i] [--model <role>]');
   const root = resolveLibraryRoot(config.library);
   const slug = args.target;
   const spec = resolveStage(config, 'extract', args.modelRole);
@@ -222,7 +222,7 @@ async function runExtract(args: Args, config: AppConfig): Promise<boolean> {
 }
 
 async function runSynthesize(args: Args, config: AppConfig): Promise<void> {
-  if (!args.target) throw new Error('Usage: glean synthesize <book> [--model <role>]');
+  if (!args.target) throw new Error('Usage: distill synthesize <book> [--model <role>]');
   const root = resolveLibraryRoot(config.library);
   const slug = args.target;
   const spec = resolveStage(config, 'synthesize', args.modelRole);
@@ -242,7 +242,7 @@ async function runSynthesize(args: Args, config: AppConfig): Promise<void> {
 }
 
 async function runAnki(args: Args, config: AppConfig): Promise<boolean> {
-  if (!args.target) throw new Error('Usage: glean anki <book>');
+  if (!args.target) throw new Error('Usage: distill anki <book>');
   const root = resolveLibraryRoot(config.library);
   const book = await requireBook(root, args.target);
 
@@ -254,7 +254,7 @@ async function runAnki(args: Args, config: AppConfig): Promise<boolean> {
     console.log(`  Staged cards are suspended until you approve them in Anki's Inbox (${result.batches.length} batch(es)).`);
   }
   if (result.notExtracted.length > 0) {
-    console.log(`  ${result.notExtracted.length} selected chapter(s) not extracted yet; run: glean extract ${args.target}`);
+    console.log(`  ${result.notExtracted.length} selected chapter(s) not extracted yet; run: distill extract ${args.target}`);
   }
   for (const { card, error } of result.failed) console.log(`  ✗ ${card.front.slice(0, 60)}: ${error}`);
   return result.failed.length === 0;
@@ -274,7 +274,7 @@ const DECISIONS: { title: string; value: Decision }[] = [
 ];
 
 async function runSkillPlan(args: Args, config: AppConfig): Promise<void> {
-  const name = skillName(args, 'glean skill plan <name> [--books <slug,…>] [--model <role>]');
+  const name = skillName(args, 'distill skill plan <name> [--books <slug,…>] [--model <role>]');
   const root = resolveLibraryRoot(config.library);
   const spec = resolveStage(config, 'skill', args.modelRole);
   const provider = createProvider(spec);
@@ -312,11 +312,11 @@ async function runSkillPlan(args: Args, config: AppConfig): Promise<void> {
     return;
   }
   console.log(`Saved ${await writeRecipe(root, approved)}`);
-  console.log(`Next: glean skill build ${name}`);
+  console.log(`Next: distill skill build ${name}`);
 }
 
 async function runSkillBuild(args: Args, config: AppConfig): Promise<boolean> {
-  const name = skillName(args, 'glean skill build <name> [--model <role>]');
+  const name = skillName(args, 'distill skill build <name> [--model <role>]');
   const root = resolveLibraryRoot(config.library);
   const spec = resolveStage(config, 'skill', args.modelRole);
   const recipe = await requireRecipe(root, name);
@@ -350,19 +350,19 @@ async function runSkillBuild(args: Args, config: AppConfig): Promise<boolean> {
     if (meanDelta !== undefined && meanDelta <= 0) {
       console.log('  [!] No uplift over the baseline: the eval cases may not test what the skill adds.');
     }
-    console.log(`  ${skillDir(root, name)} · install with: glean skill install ${name}`);
+    console.log(`  ${skillDir(root, name)} · install with: distill skill install ${name}`);
     return true;
   }
 
   console.log(`\n✗ ${name}: still failing after ${result.attempts} attempt(s) · ${casesPassed}/${casesTotal} cases ≥ ${threshold} · ${cost}`);
   for (const c of cases.filter(c => failing.includes(c.name))) console.log(`  ${c.name}: ${c.score.toFixed(2)}`);
   console.log(`  Results: ${resultsPath}`);
-  console.log(`  Review spec.md or the recipe's eval cases (glean skill plan ${name}), then re-run the build.`);
+  console.log(`  Review spec.md or the recipe's eval cases (distill skill plan ${name}), then re-run the build.`);
   return false;
 }
 
 async function runSkillInstall(args: Args, config: AppConfig): Promise<void> {
-  const name = skillName(args, 'glean skill install <name>');
+  const name = skillName(args, 'distill skill install <name>');
   const root = resolveLibraryRoot(config.library);
   for (const r of await installSkill(root, name, config.skills.targets)) {
     console.log(`${r.status === 'installed' ? '✓ linked' : '= already linked'} ${r.link}`);
@@ -380,7 +380,7 @@ async function runSkill(args: Args, config: AppConfig): Promise<boolean> {
       await runSkillInstall(args, config);
       return true;
     default:
-      throw new Error('Usage: glean skill <plan|build|install> <name>');
+      throw new Error('Usage: distill skill <plan|build|install> <name>');
   }
 }
 

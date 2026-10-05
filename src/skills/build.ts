@@ -69,7 +69,7 @@ export async function sourceFiles(root: string, recipe: Recipe): Promise<{ reada
     if (!book) throw new Error(`Recipe source "${source.book}" is not in the library`);
     const summary = summaryPath(root, source.book);
     if (!(await Bun.file(summary).exists())) {
-      throw new Error(`"${source.book}" has no summary.md yet. Run: glean synthesize ${source.book}`);
+      throw new Error(`"${source.book}" has no summary.md yet. Run: distill synthesize ${source.book}`);
     }
     const indices = source.chapters ?? book.selected;
     const chapters = book.chapters.filter(c => indices.includes(c.index));
@@ -77,7 +77,7 @@ export async function sourceFiles(root: string, recipe: Recipe): Promise<{ reada
     for (const chapter of chapters) {
       const path = extractionPath(root, source.book, chapter);
       if (!(await Bun.file(path).exists())) {
-        throw new Error(`"${source.book}" chapter ${chapter.index} (${chapter.title}) is not extracted. Run: glean extract ${source.book}`);
+        throw new Error(`"${source.book}" chapter ${chapter.index} (${chapter.title}) is not extracted. Run: distill extract ${source.book}`);
       }
       extractions.push(path);
     }

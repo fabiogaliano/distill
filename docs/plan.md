@@ -1,4 +1,4 @@
-# glean — plan & decisions
+# distill — plan & decisions
 
 Decided 2026-09-29. Single user (me). Books in → readable summaries, Anki cards, and Claude/GPT skills out.
 
@@ -12,9 +12,9 @@ Decided 2026-09-29. Single user (me). Books in → readable summaries, Anki card
 
 ## Project
 
-- Evolve glean in place (keep repo + history, name, Bun + TS).
-- Move repo to `~/Core/dev/projects/glean`.
-- Rust `epub-chapter-splitter` stays as glean's submodule — the only splitter.
+- Evolve distill in place (keep repo + history, name, Bun + TS).
+- Move repo to `~/Core/dev/projects/distill`.
+- Rust `epub-chapter-splitter` stays as distill's submodule — the only splitter.
 - Cleanup in `book-summary/`: delete the Zig port and the duplicate top-level Rust splitter. Books and existing summaries untouched.
 - Existing outputs (`skills_to_create/`, Covert/Rosenfeld summaries): leave alone. New pipeline applies to new work only.
 
@@ -69,13 +69,13 @@ stages:
 Each stage idempotent, reads/writes the library on disk.
 
 ```
-glean ingest <epub>             split → books/<slug>/, pick content chapters
-glean extract <slug> [-i]       per-chapter structured pass (concurrent, cached)
-glean synthesize <slug>         book-level summary.md from extractions
-glean anki <slug>               push card candidates to Anki (deduped)
-glean skill plan <name>         model proposes recipe; I approve/edit
-glean skill build <name>        spec → claude/ + gpt/ variants → eval gate
-glean skill install <name>      symlink into ~/.claude/skills and ~/.pi/agent/skills
+distill ingest <epub>             split → books/<slug>/, pick content chapters
+distill extract <slug> [-i]       per-chapter structured pass (concurrent, cached)
+distill synthesize <slug>         book-level summary.md from extractions
+distill anki <slug>               push card candidates to Anki (deduped)
+distill skill plan <name>         model proposes recipe; I approve/edit
+distill skill build <name>        spec → claude/ + gpt/ variants → eval gate
+distill skill install <name>      symlink into ~/.claude/skills and ~/.pi/agent/skills
 ```
 
 ### Extraction (replaces concise/detailed modes)

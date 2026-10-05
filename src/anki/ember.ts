@@ -26,13 +26,13 @@ export const MAX_STAGE_BATCH = 20;
 // Ember is an MCP server that runs TypeScript against the Anki collection. Generated
 // cards go in through stageMany: suspended in their deck until approved in the app.
 export async function connectEmber(
-  url = process.env.GLEAN_ANKI_MCP_URL,
-  token = process.env.GLEAN_ANKI_MCP_TOKEN
+  url = process.env.DISTILL_ANKI_MCP_URL,
+  token = process.env.DISTILL_ANKI_MCP_TOKEN
 ): Promise<AnkiBackend> {
   if (!url || !token) {
-    throw new Error('Set GLEAN_ANKI_MCP_URL and GLEAN_ANKI_MCP_TOKEN to reach the ember Anki MCP server');
+    throw new Error('Set DISTILL_ANKI_MCP_URL and DISTILL_ANKI_MCP_TOKEN to reach the ember Anki MCP server');
   }
-  const client = new Client({ name: 'glean', version: '0.1.0' });
+  const client = new Client({ name: 'distill', version: '0.1.0' });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { Authorization: `Bearer ${token}` } } })
   );

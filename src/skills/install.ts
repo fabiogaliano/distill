@@ -15,7 +15,7 @@ export async function installSkill(root: string, name: string, targets: Record<s
   for (const [target, config] of Object.entries(targets)) {
     const source = variantDir(root, name, target);
     if (!(await Bun.file(join(source, 'SKILL.md')).exists())) {
-      throw new Error(`No ${target}/SKILL.md for "${name}". Run: glean skill build ${name}`);
+      throw new Error(`No ${target}/SKILL.md for "${name}". Run: distill skill build ${name}`);
     }
     const dir = resolveLibraryRoot(config.install);
     const link = join(dir, name);

@@ -4,7 +4,7 @@ install: setup
 	bun link
 
 uninstall:
-	bun unlink glean
+	bun unlink distill
 
 setup:
 	bun install

@@ -13,7 +13,7 @@ export interface FixtureChapter {
 }
 
 export async function makeLibrary(chapters: FixtureChapter[]): Promise<{ root: string; book: LibraryBook; cleanup: () => Promise<void> }> {
-  const root = await mkdtemp(join(tmpdir(), 'glean-lib-'));
+  const root = await mkdtemp(join(tmpdir(), 'distill-lib-'));
   const dir = join(root, 'books', SLUG);
   await mkdir(join(dir, 'chapters'), { recursive: true });
 
